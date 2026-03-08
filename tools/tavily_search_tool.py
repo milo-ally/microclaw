@@ -13,11 +13,10 @@ from langchain_tavily.tavily_search import TavilySearch
 def create_tavily_search_tool() -> TavilySearch | None:
     if not TAVILY_API_KEY or not TAVILY_API_KEY.startswith("tvly-"):
         return None
-    
-    tool = TavilySearch(
-        tavily_api_key=TAVILY_API_KEY
-    )
     if TOOL_STATUS == "on":
+        tool = TavilySearch(
+            tavily_api_key=TAVILY_API_KEY
+        )
         return tool
     return None
 
