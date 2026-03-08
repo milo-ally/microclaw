@@ -8,3 +8,6 @@ venv/
 Thumbs.db
 .env
 config.json
+test.ipynb
+PRD.md
+TODOs.md

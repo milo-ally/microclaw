@@ -42,3 +42,6 @@ pyfiglet==1.0.4
 # postgresql
 sqlalchemy
 psycopg2-binary
+
+# deepagents
+deepagents

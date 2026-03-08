@@ -1,0 +1,97 @@
+{
+  "project_name": "数据库分析项目",
+  "created_at": "2026-03-08T14:42:55.364481",
+  "last_updated": "2026-03-08T14:46:49.415822",
+  "total_tasks": 6,
+  "completed_tasks": 3,
+  "tasks": [
+    {
+      "id": "task_1",
+      "description": "数据库结构分析",
+      "status": "completed",
+      "priority": "high",
+      "dependencies": [],
+      "estimated_time": "2h",
+      "actual_time": "",
+      "assigned_to": "",
+      "notes": "完成数据库结构分析：发现4个表（students, professors, courses, enrollments），包含学生、教授、课程和选课信息",
+      "created_at": "2026-03-08T14:42:55.364481",
+      "completed_at": "2026-03-08T14:43:13.794245"
+    },
+    {
+      "id": "task_2",
+      "description": "数据质量评估",
+      "status": "completed",
+      "priority": "high",
+      "dependencies": [
+        "task_1"
+      ],
+      "estimated_time": "2h",
+      "actual_time": "",
+      "assigned_to": "",
+      "notes": "数据质量评估完成：数据完整性良好，无空值，外键关系完整，数据范围符合约束条件",
+      "created_at": "2026-03-08T14:42:55.364481",
+      "completed_at": "2026-03-08T14:44:29.809471"
+    },
+    {
+      "id": "task_3",
+      "description": "数据统计计算",
+      "status": "completed",
+      "priority": "medium",
+      "dependencies": [
+        "task_2"
+      ],
+      "estimated_time": "2h",
+      "actual_time": "",
+      "assigned_to": "",
+      "notes": "数据统计计算完成：获取了学生、教授、课程、选课等8个维度的详细统计数据",
+      "created_at": "2026-03-08T14:42:55.364481",
+      "completed_at": "2026-03-08T14:46:44.703898"
+    },
+    {
+      "id": "task_4",
+      "description": "可视化设计",
+      "status": "in_progress",
+      "priority": "medium",
+      "dependencies": [
+        "task_3"
+      ],
+      "estimated_time": "2h",
+      "actual_time": "",
+      "assigned_to": "",
+      "notes": "开始可视化设计",
+      "created_at": "2026-03-08T14:42:55.364481",
+      "completed_at": ""
+    },
+    {
+      "id": "task_5",
+      "description": "报表生成",
+      "status": "pending",
+      "priority": "high",
+      "dependencies": [
+        "task_4"
+      ],
+      "estimated_time": "2h",
+      "actual_time": "",
+      "assigned_to": "",
+      "notes": "",
+      "created_at": "2026-03-08T14:42:55.364481",
+      "completed_at": ""
+    },
+    {
+      "id": "task_6",
+      "description": "结果总结",
+      "status": "pending",
+      "priority": "medium",
+      "dependencies": [
+        "task_5"
+      ],
+      "estimated_time": "2h",
+      "actual_time": "",
+      "assigned_to": "",
+      "notes": "",
+      "created_at": "2026-03-08T14:42:55.364481",
+      "completed_at": ""
+    }
+  ]
+}

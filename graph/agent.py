@@ -1,6 +1,8 @@
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.messages import AIMessageChunk, ToolMessageChunk, ToolCallChunk
+from deepagents import create_deep_agent
+
 from typing import AsyncGenerator, Any, Optional
 from pathlib import Path
 
@@ -8,6 +10,7 @@ from tools import get_all_tools
 from mcps import get_mcp_tools
 
 from config import get_llm_config, get_base_dir, get_rag_mode
+from config import get_deepagent
 
 from .model import ChatOpenAIWithReasoning
 from .session_manager import session_manager
@@ -40,6 +43,7 @@ class AgentManager:
         session_manager.initialize(base_dir)
         # print(f"Agent initialized by using model: {llm_info.get('model')}, loaded tools number: {len(self._tools)}")
 
+
     def _build_agent(self): 
         """Build agent with model and tools"""
         assert self._model is not None 
@@ -47,11 +51,23 @@ class AgentManager:
 
         rag_mode = get_rag_mode()
         system_prompt = build_system_prompt(self._base_dir, rag_mode=rag_mode)
-        agent = create_agent(
-            model=self._model,
+        deepagent = get_deepagent()
+
+        if not deepagent:
+            agent = create_agent(
+                model=self._model,
+                tools=self._tools,
+                system_prompt=system_prompt
+            )
+            # print(f"Agent类型: {type(agent)}")
+            return agent 
+        
+        agent = create_deep_agent(
+            model=self._model, 
             tools=self._tools,
             system_prompt=system_prompt
         )
+        # print(f"Agent类型: {type(agent)}")
         return agent 
     def _build_messages(
         self, user_message: str, 

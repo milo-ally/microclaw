@@ -99,3 +99,13 @@ def set_mcps_config(mcps_config: dict[str, Any]) -> dict[str, Any]:
     cfg["mcps"] = mcps_config
     save_config(cfg)
   
+
+# ======== DEEPAGENT ========
+def get_deepagent() -> bool:
+    return load_config().get("deepagent", {})
+
+
+def set_deepagent(deepagent_config: bool) -> dict[str, Any]: 
+    cfg = load_config()
+    cfg["deepagent"] = deepagent_config
+    save_config(cfg)

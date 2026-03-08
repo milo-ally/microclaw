@@ -60,6 +60,11 @@
     <location>./skills/slack-gif-creator/SKILL.md</location>
   </skill>
   <skill>
+    <name>task-planner</name>
+    <description>帮助用户进行复杂任务规划、分解和跟踪的技能。当用户提出复杂需求、多步骤项目或需要系统化管理的任务时使用此技能。使用场景包括：项目规划、任务分解、进度跟踪、资源分配、时间估算等。当用户说"这个任务很复杂"、"需要规划一下"、"帮我分解任务"、"制定项目计划"、"项目管理"、"任务跟踪"、"进度管理"时，使用此技能。优先使用内置脚本工具来减少模型负担，提高执行效率。</description>
+    <location>./skills/task-planner/SKILL.md</location>
+  </skill>
+  <skill>
     <name>theme-factory</name>
     <description>Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. There are 10 pre-set themes with colors/fonts that you can apply to any artifact that has been creating, or can generate a new theme on-the-fly.</description>
     <location>./skills/theme-factory/SKILL.md</location>
