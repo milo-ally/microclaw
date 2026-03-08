@@ -22,14 +22,11 @@ model = ChatOpenAI(
     base_url=BASE_URL
 )
 
-db = SQLDatabase.from_uri(DB_URI)
-
-
-toolkit = SQLDatabaseToolkit(db=db, llm=model)
-tools = toolkit.get_tools()
-
 def create_sql_tools() -> list | None:
     if TOOL_STATUS == "on":
+        db = SQLDatabase.from_uri(DB_URI)
+        toolkit = SQLDatabaseToolkit(db=db, llm=model)
+        tools = toolkit.get_tools()
         return tools
     return None
 
