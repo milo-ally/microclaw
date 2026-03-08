@@ -40,7 +40,7 @@ pip install -r requirements.txt
     └── USER.md
 ```
 
-其中 `skills` 目录参照 https://github.com/anthropics/skills/tree/main/skills下的每一个条目。本项目兼容 anthropic skills 格式。
+其中 `skills` 目录参照 https://github.com/anthropics/skills/tree/main/skills 下的每一个条目。本项目兼容 anthropic skills 格式。
 
 ### 3. 填写配置文件
 
