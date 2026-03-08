@@ -1,0 +1,55 @@
+{
+  "platform": "Ubuntu-24.04",
+  "base_dir": "/home/milo/learnspace/AI_Application/Agent/ComputerUseAgent/agent",
+  "llm": {
+    "provider": "deepseek",
+    "format": "openai",
+    "info": {
+      "model": "deepseek-chat",
+      "base_url": "https://api.deepseek.com",
+      "api_key": "sk-fxxxxxxxxxxxxxxxx", 
+      "temperature": 0.2, 
+      "enable_thinking": false, 
+      "is_vision_model": false
+    }
+  },
+  "embeddings": {
+    "provider": "aliyun",
+    "format": "openai",
+    "info": {
+        "model": "text-embedding-v3", 
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", 
+        "api_key": "sk-xxxxxxxx"
+    }
+  }, 
+  "tools": {
+    "ask_user_question_tool": {
+      "status": "on"
+    }, 
+    "fetch_url_tool": {
+      "status": "on"
+    },
+    "python_repl_tool": { 
+      "status": "on"
+    },
+    "sql_tools": {
+      "status": "on",
+      "db_uri": "postgresql+psycopg2://xxxxx:xxxxx@localhost:5432/xxxxx"
+    },
+    "read_file_tool": {
+      "status": "on"
+    },
+    "tavily_search_tool" :{
+      "status": "on", 
+      "tavily_api_key": "tvly-dev-xxxxxxxxxxxxxxxxx"
+    }
+  },
+  "rag_mode": false,
+  "mcps": {
+    "chrome-mcp-server": {
+      "transport": "streamable-http", 
+      "url": "http://127.0.0.1:12306/mcp"
+    }
+  }
+}
+

@@ -1,0 +1,15 @@
+{
+  "title": "New Chat",
+  "created_at": 1772869654.583268,
+  "updated_at": 1772869654.583268,
+  "messages": [
+    {
+      "role": "user",
+      "content": "/clear"
+    },
+    {
+      "role": "assistant",
+      "content": "我已经清除了之前的对话历史。现在我们可以开始新的对话了！😊\n\n你好Milo！我是AUTOX，你的AI助手。我可以帮助你处理各种任务，包括文件操作、编程、数据分析、文档处理等等。\n\n有什么我可以帮助你的吗？"
+    }
+  ]
+}
