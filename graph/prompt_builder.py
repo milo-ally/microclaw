@@ -27,11 +27,12 @@ USER_PLATFORM = get_platform()
 def build_system_prompt(base_dir: Path | str, rag_mode: bool = False) -> str:
     base = Path(base_dir) if isinstance(base_dir, str) else base_dir
     components = [
+        ("BOOT STRAP", base / "workplace" / "BOOTSTRAP.md"),
         ("Skills Snapshot", base / "skills" / "SKILL_SNAPSHOT.md"),
         ("Soul", base / "workplace" / "SOUL.md"),
         ("Identity", base / "workplace" / "IDENTITY.md"),
         ("User Profile", base / "workplace" / "USER.md"),
-        ("Agent Guide", base / "workplace" / "AGENTS.md"),
+        ("Agent Guide", base / "workplace" / "AGENTS.md")
     ]
     if not rag_mode:
         components.append(("long term memory", base / "memory" / "MEMORY.md"))

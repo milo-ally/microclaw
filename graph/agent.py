@@ -170,12 +170,20 @@ class AgentManager:
             })
         messages = self._build_messages(message, history=augmented_history, image_url=image_url)
 
+        # 用于token计算和输出
         input_content = ""
         full_response = ""
         reasoning_content = ""
         tool_call_content = ""
         tool_response_content = ""
         tools_just_finished = False
+
+        # 用于输出
+        total_ai_msg = ""
+        total_function_call_msg = ""
+        last_ai_len = 0
+        last_func_len = 0
+        
 
         for msg in messages: 
             if isinstance(msg, (HumanMessage, AIMessage)):
@@ -243,14 +251,41 @@ class AgentManager:
                         "content": args,
                     }
 
-            # 用于token计算
+            # 用于token计算和消息列表构建
             elif mode == "updates":
                 if isinstance(data, dict):
                     for node_name, node_data in data.items():
+                        # 输出完整的正常ai消息内容
+                        if node_name == "model" and "messages" in node_data: 
+                            for ai_msg in node_data["messages"]: 
+                                if hasattr(ai_msg, "tool_calls") and not ai_msg.tool_calls:
+                                    msg_chunk = str(ai_msg.content)
+                                    total_ai_msg += msg_chunk
+                                    new_ai_content = total_ai_msg[last_ai_len:] # 只yield新增的内容
+                                    if new_ai_content:
+                                        yield {
+                                            "type": "ai_message", 
+                                            "content": new_ai_content  # 只传新内容，不是累加的全部
+                                        }
+                                        last_ai_len = len(total_ai_msg)  # 更新长度
+                        
+                        # 输出完整的ai发起工具调用的信息
+                        if node_name == "model" and "messages" in node_data: 
+                            for function_call_msg in node_data["messages"]: 
+                                if hasattr(function_call_msg, "tool_calls") and function_call_msg.tool_calls:
+                                    msg_chunk = str(function_call_msg.content)
+                                    total_function_call_msg += msg_chunk
+                                    new_func_content = total_function_call_msg[last_func_len:] # 只yield新增的内容
+                                    if new_func_content:
+                                        yield {
+                                            "type": "toolcall_message", 
+                                            "content": new_func_content  # 只传新内容，不是累加的全部
+                                        }
+                                        last_func_len = len(total_function_call_msg)  # 更新长度
+
 
                         # 输出完整的tool_response内容
                         if node_name == "tools" and "messages" in node_data:
-
                             for tool_msg in node_data["messages"]:
                                 if hasattr(tool_msg, "name"):
                                     output_msg = str(tool_msg.content)

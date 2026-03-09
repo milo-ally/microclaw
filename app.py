@@ -1,4 +1,5 @@
 import asyncio
+from sched import Event
 import sys
 import uuid
 import traceback
@@ -48,15 +49,26 @@ def clear_terminal():
     """Cross-platform terminal clear"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
-class EventType(Enum): 
-    REASONING_TOKEN_EVENT = "reasoning_token"
-    TOKEN_EVENT = "token" 
-    TOOL_CALLING_EVENT = "tool_calling"
+class EventType(Enum):
+
+    # 用于流式输出
+    REASONING_TOKEN_EVENT = "reasoning_token" # streaming
+    TOKEN_EVENT = "token" # streaming
+    TOOL_CALLING_EVENT = "tool_calling" # streaming
+
+    # 用于消息队列保存
+    AI_MESSAGE = "ai_message"
+    TOOLCALL_MESSAGE = "toolcall_message"
+
+    # 用于token计算
     TOOL_EXECUTE_EVENT = "tool_execute"
-    TOOL_RESPONSE_EVENT = "tool_response"
+    TOOL_RESPONSE_MESSAGE = "tool_response"
     TOOL_EXECUTE_DONE_EVENT = "tool_execute_done"
     RETRIEVAL_EVENT = "retrieval"
     ALL_DONE_EVENT = "all_done"
+
+    # 用于调试 
+    DEBUG = "debug"
 
 async def event_generator(
     base_dir: Path,
@@ -85,6 +97,7 @@ async def event_generator(
                 if event["type"] == EventType.REASONING_TOKEN_EVENT.value:
                     if enable_thinking:
                         reasoning_content = event["content"]
+
                         # 1. 首次输出思考内容时，先输出开始标签
                         if not has_output_start_tag:
                             yield {
@@ -126,9 +139,9 @@ async def event_generator(
                         "input": event["input"]
                     }
 
-                elif event["type"] == EventType.TOOL_RESPONSE_EVENT.value:
+                elif event["type"] == EventType.TOOL_RESPONSE_MESSAGE.value:
                     yield {
-                        "type": EventType.TOOL_RESPONSE_EVENT.value,
+                        "type": EventType.TOOL_RESPONSE_MESSAGE.value,
                         "output": event["output"]
                     }
 
@@ -154,6 +167,20 @@ async def event_generator(
                         "tool_call_content": event["tool_call_content"],
                         "tool_response_content": event["tool_response_content"],
                         "retrieval_content": event["retrieval_content"],
+                    }
+
+                # AI回复的完整信息
+                elif event["type"] == EventType.AI_MESSAGE.value: 
+                    yield {
+                        "type": EventType.AI_MESSAGE.value, 
+                        "content": event["content"]
+                    }
+
+                # AI即将发起工具调用的完整信息
+                elif event["type"] == EventType.TOOLCALL_MESSAGE.value: 
+                    yield {
+                        "type": EventType.TOOLCALL_MESSAGE.value, 
+                        "content": event["content"]
                     }
 
                 else: 
@@ -226,7 +253,6 @@ def get_session_id_from_user():
             print(f"\n{PrintColor.YELLOW}⚠️  Input interrupted, auto-generating session ID: {auto_session_id}{PrintColor.RESET}")
             return auto_session_id
 
-# Interactive main function
 async def main(): 
     try:
         # ========== Stylized startup interface ==========
@@ -247,9 +273,13 @@ async def main():
         
         print_loading_animation("Configuring RAG mode", 0.8)
         rag_mode = get_rag_mode()
+
+        # ========== 唯一新增的修复代码 ==========
+        session_manager.initialize(base_dir)  # 调用SessionManager的initialize方法
         
         # ========== New: Get/generate session ID ==========
         session_id = get_session_id_from_user()
+        
         
         # ========== Print initialization info (优化排版，更有层级感) ==========
         print(f"\n{PrintColor.BOLD}{PrintColor.BLUE}{PrintColor.UNDERLINE}📋 System Information {PrintColor.RESET}")
@@ -285,11 +315,16 @@ async def main():
 
         while True:
             # Reset full response content for each conversation
+            # 在 while True 里面，和 full_response 放一起
             full_response = ""
             tool_call_content = ""
             tool_response_content = ""
             retrieval_content = ""
-            
+
+            # ========== 【最小修复】加这两行 ==========
+            complete_ai_message = ""       # 拼接完整AI消息
+            complete_functioncall_message = ""  # 拼接完整工具调用消息
+
             # Get user input (stylized prompt)
             try:
                 user_input = input(f"{PrintColor.BOLD}{PrintColor.GREEN}YOU > {PrintColor.RESET}").strip()  
@@ -314,6 +349,7 @@ async def main():
             # Skip empty input
             if not user_input:
                 continue
+            session_manager.save_message(session_id, "user", user_input)
 
             print(f"{PrintColor.BOLD}{PrintColor.BLUE}AUTOX > {PrintColor.RESET}", end="", flush=True)
             
@@ -345,7 +381,7 @@ async def main():
                         print(f"   {PrintColor.YELLOW}Tool name: {event['tool']}{PrintColor.RESET}")
                         print(f"   {PrintColor.YELLOW}Input parameters: {str(event['input'])[:80]}{PrintColor.RESET}", flush=True)
 
-                    elif event["type"] == EventType.TOOL_RESPONSE_EVENT.value:
+                    elif event["type"] == EventType.TOOL_RESPONSE_MESSAGE.value:
                         tool_response_content += str(event["output"])
                         print()
                         print(f"{PrintColor.BOLD}{PrintColor.PURPLE}📊 [Tool Response]{PrintColor.RESET}")
@@ -371,18 +407,18 @@ async def main():
                             print(f"{PrintColor.CYAN}├── Tool call content length: {len(event['tool_call_content'])}{PrintColor.RESET}")
                             print(f"{PrintColor.CYAN}├── Tool response content length: {len(event['tool_response_content'])}{PrintColor.RESET}")
                             print(f"{PrintColor.CYAN}└── Retrieval content length: {len(event['retrieval_content'])}{PrintColor.RESET}")
+
+                    elif event["type"] == EventType.AI_MESSAGE.value:
+                        ai_message = event["content"]
+                        session_manager.save_message(session_id, "assistant", ai_message)  # 直接保存完整内容
                         
-                        # Save session information
-                        try:
-                            session_manager.save_message(session_id, "user", user_input)
-                            session_manager.save_message(session_id, "assistant", full_response)
-                            if rag_mode:
-                                session_manager.save_message(session_id, "retrieval", retrieval_content)
-                            if DEBUGMODE:
-                                print(f"DEBUG: Saving session_id={session_id}")
-                                print(f"\n{PrintColor.GREEN}✅ Session saved{PrintColor.RESET}")
-                        except Exception as e:
-                            print(f"{PrintColor.RED}❌ Failed to save session: {e}{PrintColor.RESET}")
+                    elif event["type"] == EventType.TOOLCALL_MESSAGE.value:
+                        toolcall_message = event["content"]
+                        session_manager.save_message(session_id, "assistant", toolcall_message)  # 直接保存完整内容
+
+
+
+
                         
                         # Stylized separator（换行后输出分隔线）
                         print(f"\n{PrintColor.BOLD}{PrintColor.BLUE}──────────────────────────────────────────────{PrintColor.RESET}\n")
@@ -405,3 +441,9 @@ if __name__ == "__main__":
         print(f"\n{PrintColor.RED}💥 [Program Crash] {type(e).__name__}: {str(e)}{PrintColor.RESET}")
         print(f"{PrintColor.RED}📝 Full stack trace:\n{traceback.format_exc()}{PrintColor.RESET}")
         sys.exit(1)
+
+
+""" 
+before: {'messages': [AIMessage(content="I will...", additional_kwargs={}, response_metadata={'finish_reason': 'tool_calls', 'model_name': 'deepseek-chat', 'system_fingerprint': 'fp_eaab8d114b_prod0820_fp8_kvcache', 'model_provider': 'openai'}, id='lc_run--019cd0ef-09ed-7c11-bcf8-5e74cc165338', tool_calls=[{'name': 'terminal', 'args': {'command': 'ls -la'}, 'id': 'call_00_7o4j7y6MHeIbKr6dVqIXFgpS', 'type': 'tool_call'}], invalid_tool_calls=[], usage_metadata={'input_tokens': 7230, 'output_tokens': 64, 'total_tokens': 7294, 'input_token_details': {'cache_read': 7168}, 'output_token_details': {}})]}
+after: {'messages': [AIMessage(content="here's the...", additional_kwargs={}, response_metadata={'finish_reason': 'stop', 'model_name': 'deepseek-chat', 'system_fingerprint': 'fp_eaab8d114b_prod0820_fp8_kvcache', 'model_provider': 'openai'}, id='lc_run--019cd0ef-1b2b-77e1-95eb-b6fda6f1bb85', tool_calls=[], invalid_tool_calls=[], usage_metadata={'input_tokens': 7612, 'output_tokens': 249, 'total_tokens': 7861, 'input_token_details': {'cache_read': 7488}, 'output_token_details': {}})]}
+"""

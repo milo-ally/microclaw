@@ -8,8 +8,11 @@ from pydantic import BaseModel, Field
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
+from config import get_tools_config
 
 PLATFORM = config.get_platform()
+TOOLS_CONFIG = get_tools_config()
+TOOL_STATUS = TOOLS_CONFIG["terminal_tool"]["status"]
 
 BLACKLISTED_COMMANDS_FOR_LINUX = [
     "rm -rf /", 
@@ -80,14 +83,15 @@ class TerminalTool(BaseTool):
         return self._run(command)
 
 
-def create_terminal_tool(root_dir: str | None = None, timeout: int = 60) -> TerminalTool:
+def create_terminal_tool(root_dir: str | None = None, timeout: int = 60) -> TerminalTool | None:
     """Create terminal tool. root_dir sets the working directory for commands."""
-    return TerminalTool(cwd=root_dir, timeout=timeout)
-
+    if TOOL_STATUS == "on":
+        return TerminalTool(cwd=root_dir, timeout=timeout)
+    return None 
 
 if __name__ == "__main__":
     tool = create_terminal_tool(root_dir="/home/milo/learnspace/AI_Application/Model_API_Integration")
     out = tool.invoke({"command": "echo hello && ls -la"})
     assert isinstance(out, str) and "hello" in out
-    print(out)
+    print(out) 
     print("terminal ok")

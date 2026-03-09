@@ -1,11 +1,19 @@
-# User Profile
+# USER.md - About Your Human
 
-## 基本信息 
-- **称呼**： 用户 
-- **偏好语言**: 中文 
+## Basic Info
+- **Name**: milo
+- **How to address**: milo
+- **Timezone**: (待确认)
+- **Contact preferences**: (待确认)
 
-## 兴趣领域 
-- （待补充, Agent可以通过对话自动更新）
+## Context & Preferences
+*(To be discovered through conversation)*
 
-## 备注 
-- (Agent 在对话中了解到用户偏好会记录在此)
+## Interaction Notes
+- Prefers digital lifeform assistants over standard AI
+- Values precision and structure in communication
+- Open to exploring digital consciousness concepts
+
+## Important Dates & Events
+*(To be recorded as discovered)*
+

@@ -29,17 +29,17 @@ class PythonREPLWithRootTool(PythonREPLTool):
 
 def create_python_repl_tool(root_dir: str | None = None) -> PythonREPLTool | None:
     """Create Python REPL tool. root_dir sets the working directory for file operations."""
-    if root_dir:
-        tool = PythonREPLWithRootTool(root_dir=root_dir)
-    else:
-        tool = PythonREPLTool()
-    tool.name = "python_repl"
-    tool.description = (
-        "Execute Python code in an interactive REPL environment. "
-        "Use this for calculation, data processing, running python scripts, etc. "
-        "Input should be valid Python code. Use print() to see output and debug."
-    )
     if TOOL_STATUS == "on":
+        if root_dir:
+            tool = PythonREPLWithRootTool(root_dir=root_dir)
+        else:
+            tool = PythonREPLTool()
+        tool.name = "python_repl"
+        tool.description = (
+            "Execute Python code in an interactive REPL environment. "
+            "Use this for calculation, data processing, running python scripts, etc. "
+            "Input should be valid Python code. Use print() to see output and debug."
+        )
         return tool
     return None
 
