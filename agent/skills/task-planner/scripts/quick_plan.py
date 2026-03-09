@@ -55,7 +55,7 @@ def quick_create(project_name, tasks_list):
             "status": "pending",
             "priority": priority,
             "dependencies": dependencies,
-            "estimated_time": "2h",
+            "estimated_time": "5min",
             "actual_time": "",
             "assigned_to": "",
             "notes": "",

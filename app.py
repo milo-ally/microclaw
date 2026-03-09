@@ -5,12 +5,13 @@ import uuid
 import traceback
 from pathlib import Path
 from typing import Optional
-from enum import Enum 
+from enum import Enum
 import time
-import os  # 新增：用于跨平台清屏
+import os
 import pyfiglet
-from termcolor import colored  # 搭配termcolor实现彩色输出
-from pydantic import BaseModel 
+from termcolor import colored
+from pydantic import BaseModel
+import shutil
 
 # 统一导入，避免局部作用域覆盖问题
 from config import get_base_dir, get_llm_config, get_rag_mode
@@ -21,66 +22,95 @@ from tools.skills_scanner import scan_skills
 DEBUGMODE = True
 
 class PrintColor:
-    """Terminal color styling class"""
-    # Basic colors
+    BLACK = "\033[30m"
     RED = "\033[31m"
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
     BLUE = "\033[34m"
     PURPLE = "\033[35m"
-    ORANGE = "\033[38;5;208m"
     CYAN = "\033[36m"
-    PINK = "\033[38;5;205m"
     WHITE = "\033[37m"
-    # Styles
+
     BOLD = "\033[1m"
     ITALIC = "\033[3m"
     UNDERLINE = "\033[4m"
-    DIM = "\033[2m"  # 新增：暗淡样式，提升层级感
-    # Background colors
-    BG_BLUE = "\033[44m"
-    BG_GRAY = "\033[48;5;237m"
-    BG_DARK = "\033[48;5;234m"  # 新增：深色背景，更有科技感
-    # Reset
+    DIM = "\033[2m"
     RESET = "\033[0m"
 
-# 新增：跨平台清屏函数（替代原有简单清屏）
+    BG_DARK = "\033[48;5;234m"
+    BG_DARKER = "\033[48;5;233m"
+    BG_PANEL = "\033[48;5;235m"
+
 def clear_terminal():
-    """Cross-platform terminal clear"""
     os.system('cls' if os.name == 'nt' else 'clear')
 
+def terminal_width():
+    return shutil.get_terminal_size().columns
+
+def bar(color=PrintColor.CYAN):
+    w = terminal_width()
+    print(f"{color}{'─' * w}{PrintColor.RESET}")
+
+def panel_title(text):
+    print(f"\n{PrintColor.BOLD}{PrintColor.CYAN}▶ {text}{PrintColor.RESET}")
+
+# ========== 加载动画（OpenClaw 风格） ==========
+def print_loading(text, duration=1.0):
+    chars = ["⡿", "⣟", "⣯", "⣷", "⣾", "⣽", "⣻", "⢿"]
+    start = time.time()
+    i = 0
+    while time.time() - start < duration:
+        c = chars[i % len(chars)]
+        sys.stdout.write(f"\r{PrintColor.CYAN}{PrintColor.BOLD}[{c}] {text}{PrintColor.RESET}")
+        sys.stdout.flush()
+        time.sleep(0.07)
+        i += 1
+    sys.stdout.write(f"\r{PrintColor.GREEN}{PrintColor.BOLD}[✓] {text}{PrintColor.RESET}\n")
+
+# ========== 新增：轻量级异步加载动画（无阻塞） ==========
+async def async_loading_indicator(stop_event: asyncio.Event, prefix="AI is thinking"):
+    """异步加载指示器，通过Event控制停止，无阻塞"""
+    chars = ["⡿", "⣟", "⣯", "⣷", "⣾", "⣽", "⣻", "⢿"]
+    i = 0
+    while not stop_event.is_set():
+        c = chars[i % len(chars)]
+        # 写入加载动画（覆盖当前行）
+        sys.stdout.write(f"\r{PrintColor.BLUE}{PrintColor.BOLD}AUTOX > {PrintColor.RESET}{PrintColor.CYAN}{PrintColor.BOLD}[{c}] {prefix}{PrintColor.RESET}")
+        sys.stdout.flush()
+        try:
+            # 短睡眠，允许事件被中断
+            await asyncio.sleep(0.08)
+        except asyncio.CancelledError:
+            break
+        i += 1
+    # 清除加载动画行
+    sys.stdout.write("\r" + " " * (terminal_width() - 1) + "\r")
+    sys.stdout.write(f"{PrintColor.BLUE}{PrintColor.BOLD}AUTOX > {PrintColor.RESET}")
+    sys.stdout.flush()
+
 class EventType(Enum):
-
-    # 用于流式输出
-    REASONING_TOKEN_EVENT = "reasoning_token" # streaming
-    TOKEN_EVENT = "token" # streaming
-    TOOL_CALLING_EVENT = "tool_calling" # streaming
-
-    # 用于消息队列保存
+    REASONING_TOKEN_EVENT = "reasoning_token"
+    TOKEN_EVENT = "token"
+    TOOL_CALLING_EVENT = "tool_calling"
     AI_MESSAGE = "ai_message"
     TOOLCALL_MESSAGE = "toolcall_message"
-
-    # 用于token计算
     TOOL_EXECUTE_EVENT = "tool_execute"
     TOOL_RESPONSE_MESSAGE = "tool_response"
     TOOL_EXECUTE_DONE_EVENT = "tool_execute_done"
     RETRIEVAL_EVENT = "retrieval"
     ALL_DONE_EVENT = "all_done"
-
-    # 用于调试 
     DEBUG = "debug"
 
 async def event_generator(
     base_dir: Path,
     session_id: str,
-    enable_thinking: bool, 
-    message: str, 
+    enable_thinking: bool,
+    message: str,
     image_url: Optional[str] = None
-): 
-    # ========== 关键修改：设置显眼的think标签 ==========
-    THINK_WRAPPER_START = "\n<think>\n"  # 思考开始标签（换行+标记，更易区分）
-    THINK_WRAPPER_END = "\n</think>\n"   # 思考结束标签
-    has_output_start_tag = False  # 标记是否已输出开始标签
+):
+    THINK_WRAPPER_START = "\n\n"
+    THINK_WRAPPER_END = "\n\n"
+    has_output_start_tag = False
 
     try:
         agent_manager.initialize(base_dir=base_dir)
@@ -88,44 +118,37 @@ async def event_generator(
         history = session_manager.load_session_for_agent(session_id)
 
         async for event in agent_manager.astream(
-            message=message, 
-            history=history, 
+            message=message,
+            history=history,
             image_url=image_url
         ):
             try:
-                # ========== 核心逻辑：处理思考内容的标签包裹 ==========
                 if event["type"] == EventType.REASONING_TOKEN_EVENT.value:
                     if enable_thinking:
                         reasoning_content = event["content"]
-
-                        # 1. 首次输出思考内容时，先输出开始标签
                         if not has_output_start_tag:
                             yield {
                                 "type": EventType.REASONING_TOKEN_EVENT.value,
-                                "content": THINK_WRAPPER_START  # 输出<think>开始标签
+                                "content": THINK_WRAPPER_START
                             }
                             has_output_start_tag = True
-                        # 2. 输出思考内容本身
                         yield {
                             "type": EventType.REASONING_TOKEN_EVENT.value,
                             "content": reasoning_content
                         }
 
                 elif event["type"] == EventType.TOKEN_EVENT.value:
-                    # 1. 遇到回复内容时，先闭合思考标签（如果已开启）
                     if enable_thinking and has_output_start_tag:
                         yield {
                             "type": EventType.REASONING_TOKEN_EVENT.value,
-                            "content": THINK_WRAPPER_END  # 输出[/think]结束标签
+                            "content": THINK_WRAPPER_END
                         }
                         has_output_start_tag = False
-                    # 2. 输出回复内容
                     yield {
                         "type": EventType.TOKEN_EVENT.value,
                         "content": event["content"]
                     }
 
-                # ========== 其他事件类型保持不变 ==========
                 elif event["type"] == EventType.TOOL_CALLING_EVENT.value:
                     yield {
                         "type": EventType.TOOL_CALLING_EVENT.value,
@@ -157,8 +180,6 @@ async def event_generator(
                     }
 
                 elif event["type"] == EventType.ALL_DONE_EVENT.value:
-
-                    # 输出完成事件
                     yield {
                         "type": EventType.ALL_DONE_EVENT.value,
                         "input_content": event["input_content"],
@@ -169,281 +190,206 @@ async def event_generator(
                         "retrieval_content": event["retrieval_content"],
                     }
 
-                # AI回复的完整信息
-                elif event["type"] == EventType.AI_MESSAGE.value: 
+                elif event["type"] == EventType.AI_MESSAGE.value:
                     yield {
-                        "type": EventType.AI_MESSAGE.value, 
+                        "type": EventType.AI_MESSAGE.value,
                         "content": event["content"]
                     }
 
-                # AI即将发起工具调用的完整信息
-                elif event["type"] == EventType.TOOLCALL_MESSAGE.value: 
+                elif event["type"] == EventType.TOOLCALL_MESSAGE.value:
                     yield {
-                        "type": EventType.TOOLCALL_MESSAGE.value, 
+                        "type": EventType.TOOLCALL_MESSAGE.value,
                         "content": event["content"]
                     }
 
-                else: 
-                    print(f"\n{PrintColor.RED}❌ Unknown event type: {event['type']}{PrintColor.RESET}")
+                else:
+                    print(f"\n{PrintColor.RED}❌ Unknown event: {event['type']}{PrintColor.RESET}")
 
             except Exception as e:
-                print(f"\n{PrintColor.RED}[Event Processing Error] {type(e).__name__}: {str(e)}{PrintColor.RESET}")
-                print(f"{PrintColor.RED}Stack trace: {traceback.format_exc()}{PrintColor.RESET}")
-                raise RuntimeError(f"Error processing event: {str(e)}")
-                
+                print(f"\n{PrintColor.RED}[Event Error] {e}{PrintColor.RESET}")
+                traceback.print_exc()
+                raise
+
     except Exception as e:
-        print(f"\n{PrintColor.RED}[Generator Initialization Error] {type(e).__name__}: {str(e)}{PrintColor.RESET}")
-        print(f"{PrintColor.RED}Stack trace: {traceback.format_exc()}{PrintColor.RESET}")
+        print(f"\n{PrintColor.RED}[Generator Error] {e}{PrintColor.RESET}")
+        traceback.print_exc()
         raise
 
+# ========== LOGO ==========
+def print_logo():
+    clear_terminal()
+    art = pyfiglet.figlet_format("AUTOX", font="slant")
+    print(colored(art, "cyan", attrs=["bold"]))
+    print(f"{PrintColor.DIM}Automation AI Agent • TUI{PrintColor.RESET}\n")
 
-def print_art_logo():
-    ascii_art = pyfiglet.figlet_format("AUTOX", font="bulbhead")
-    colored_art = colored(ascii_art, color="blue", attrs=["bold"])
-    print(colored_art)
-    print(f"{PrintColor.DIM}{PrintColor.CYAN}Automation AI Tool • v1.0{PrintColor.RESET}\n")
-
-def print_loading_animation(text, duration=1.5):
-    chars = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
-    start_time = time.time()
-    idx = 0
-    while time.time() - start_time < duration:
-        sys.stdout.write(f"\r{PrintColor.CYAN}{PrintColor.BOLD}[*] {PrintColor.RESET}{chars[idx % len(chars)]} {text}{PrintColor.RESET}")
-        sys.stdout.flush()
-        time.sleep(0.08)
-        idx += 1
-    sys.stdout.write(f"\r{PrintColor.GREEN}{PrintColor.BOLD}[+] {text} {PrintColor.DIM}(completed){PrintColor.RESET}\n")
-
-def get_session_id_from_user():
-    """Get session ID from user input, auto-generate if empty"""
-    print(f"\n{PrintColor.BOLD}{PrintColor.PINK}🔑 Session ID Configuration {PrintColor.RESET}")
-    print(f"{PrintColor.WHITE}• Enter a custom session ID to restore historical session")
-    print(f"• Press Enter directly to auto-generate a new session ID{PrintColor.RESET}")
-    
+# ========== Session ID ==========
+def get_session_id():
+    panel_title("Session ID")
+    print(f"{PrintColor.WHITE}• Enter to generate new session")
+    print(f"{PrintColor.WHITE}• Input ID to load history{PrintColor.RESET}")
     while True:
-        try:
-            user_input = input(f"\n{PrintColor.BOLD}{PrintColor.YELLOW}Please enter session ID (leave blank for auto-generation): {PrintColor.RESET}").strip()
-            
-            # Auto-generate if user input is empty
-            if not user_input:
-                auto_session_id = f"session_{uuid.uuid4().hex[:8]}"
-                print(f"{PrintColor.GREEN}✅ Auto-generated session ID: {auto_session_id}{PrintColor.RESET}")
-                return auto_session_id
-            
-            # Validate session ID format (simple validation to avoid illegal characters)
-            import re
-            if re.match(r'^[a-zA-Z0-9_-]{3,32}$', user_input):
-                # Check if session exists
-                try:
-                    existing_history = session_manager.load_session_for_agent(user_input)
-                    if existing_history:
-                        print(f"{PrintColor.BLUE}ℹ️  Historical session found, will load {len(existing_history)} records{PrintColor.RESET}")
-                    else:
-                        print(f"{PrintColor.YELLOW}⚠️  Session ID does not exist, new session will be created{PrintColor.RESET}")
-                    return user_input
-                except Exception:
-                    # Use user input ID even if loading fails
-                    print(f"{PrintColor.YELLOW}⚠️  Unable to verify session status, will create new session with custom ID{PrintColor.RESET}")
-                    return user_input
-            else:
-                print(f"{PrintColor.RED}❌ Invalid session ID format! Only letters, numbers, underscores, hyphens allowed, length 3-32 characters{PrintColor.RESET}")
-        except (KeyboardInterrupt, EOFError):
-            # Auto-generate ID if user interrupts input
-            auto_session_id = f"session_{uuid.uuid4().hex[:8]}"
-            print(f"\n{PrintColor.YELLOW}⚠️  Input interrupted, auto-generating session ID: {auto_session_id}{PrintColor.RESET}")
-            return auto_session_id
+        inp = input(f"\n{PrintColor.YELLOW}Session ID: {PrintColor.RESET}").strip()
+        if not inp:
+            sid = f"session_{uuid.uuid4().hex[:8]}"
+            print(f"{PrintColor.GREEN}✓ New session: {sid}{PrintColor.RESET}")
+            return sid
+        if 3 <= len(inp) <= 32:
+            print(f"{PrintColor.GREEN}✓ Using session: {inp}{PrintColor.RESET}")
+            return inp
+        print(f"{PrintColor.RED}✗ Invalid format (3-32 letters/numbers/_-){PrintColor.RESET}")
 
-async def main(): 
+# ========== MAIN ==========
+async def main():
     try:
-        # ========== Stylized startup interface ==========
-        clear_terminal()
-        
-        # Print logo
-        print_art_logo()
-        
-        # 优化：启动提示样式（深色背景+更专业的文案）
-        print(f"{PrintColor.BG_DARK}{PrintColor.WHITE}{PrintColor.BOLD} Initializing AUTOX Core... {PrintColor.RESET}\n")
-        
-        # Load configurations (with animation)
-        print_loading_animation("Loading base configuration", 0.8)
+        print_logo()
+
+        # 初始化加载
+        print_loading("Loading base config", 0.7)
         base_dir = Path(get_base_dir())
-        
-        print_loading_animation("Initializing LLM configuration", 0.8)
+
+        print_loading("Loading LLM config", 0.7)
         llm_config = get_llm_config()
-        
-        print_loading_animation("Configuring RAG mode", 0.8)
+
+        print_loading("Loading RAG mode", 0.7)
         rag_mode = get_rag_mode()
 
-        # ========== 唯一新增的修复代码 ==========
-        session_manager.initialize(base_dir)  # 调用SessionManager的initialize方法
-        
-        # ========== New: Get/generate session ID ==========
-        session_id = get_session_id_from_user()
-        
-        
-        # ========== Print initialization info (优化排版，更有层级感) ==========
-        print(f"\n{PrintColor.BOLD}{PrintColor.BLUE}{PrintColor.UNDERLINE}📋 System Information {PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}┌─────────────────────────────────────────────────────{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}│ Base directory: {PrintColor.WHITE}{base_dir}{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}│ LLM model:      {PrintColor.WHITE}{llm_config.get('info', {}).get('model', 'Unknown')}{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}│ RAG mode:       {PrintColor.WHITE}{'✅ Enabled' if rag_mode else '❌ Disabled'}{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}│ Thinking mode:  {PrintColor.WHITE}{'✅ Enabled' if llm_config.get('info', {}).get('enable_thinking', False) else '❌ Disabled'}{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}│ Vision model:   {PrintColor.WHITE}{'✅ Enabled' if llm_config.get('info', {}).get('is_vision_model', False) else '❌ Disabled'}{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}│ Session ID:     {PrintColor.WHITE}{session_id}{PrintColor.RESET}")
-        print(f"{PrintColor.CYAN}└─────────────────────────────────────────────────────{PrintColor.RESET}")
-        
-        # Check session_manager
-        try:
-            history = session_manager.load_session_for_agent(session_id) or []
-            print(f"\n{PrintColor.GREEN}✅ Session manager is ready, number of history records: {len(history)}{PrintColor.RESET}")
-        except Exception as e:
-            history = []
-            print(f"\n{PrintColor.YELLOW}⚠️  Failed to load session history, using empty history: {e}{PrintColor.RESET}")
-        
-        enable_thinking = llm_config.get("info", {}).get("enable_thinking", False)
-        is_vision_model = llm_config.get("info", {}).get("is_vision_model", False)
-        test_image_url = "https://ark-project.tos-cn-beijing.ivolces.com/images/view.jpeg" if is_vision_model else None
+        session_manager.initialize(base_dir)
 
-        # ========== Welcome message ==========
-        print(f"\n{PrintColor.BG_BLUE}{PrintColor.WHITE}{PrintColor.BOLD} Welcome to AUTOX AI Platform {PrintColor.RESET}")
-        print(f"{PrintColor.BOLD}{PrintColor.CYAN}💡 Operation Instructions:{PrintColor.RESET}")
-        print(f"   {PrintColor.WHITE}• Enter {PrintColor.YELLOW}exit/quit {PrintColor.WHITE}to exit the program")
-        print(f"   • Enter {PrintColor.YELLOW}clear {PrintColor.WHITE}to clear current session history")
-        print(f"   • Enter content directly to start conversation")
-        print(f"   • Current session ID: {PrintColor.PURPLE}{session_id}{PrintColor.RESET}")
-        print(f"\n{PrintColor.BOLD}{PrintColor.BLUE}──────────────────────────────────────────────{PrintColor.RESET}\n")
+        # Session
+        session_id = get_session_id()
+        bar()
+
+        # 系统信息面板
+        panel_title("System Info")
+        model = llm_config.get("info", {}).get("model", "unknown")
+        think = llm_config.get("info", {}).get("enable_thinking", False)
+        vision = llm_config.get("info", {}).get("is_vision_model", False)
+
+        print(f"{PrintColor.CYAN}• Base Dir: {PrintColor.WHITE}{base_dir}{PrintColor.RESET}")
+        print(f"{PrintColor.CYAN}• LLM:      {PrintColor.WHITE}{model}{PrintColor.RESET}")
+        print(f"{PrintColor.CYAN}• RAG:      {PrintColor.WHITE}{'ON' if rag_mode else 'OFF'}{PrintColor.RESET}")
+        print(f"{PrintColor.CYAN}• Think:    {PrintColor.WHITE}{'ON' if think else 'OFF'}{PrintColor.RESET}")
+        print(f"{PrintColor.CYAN}• Vision:   {PrintColor.WHITE}{'ON' if vision else 'OFF'}{PrintColor.RESET}")
+        print(f"{PrintColor.CYAN}• Session:  {PrintColor.WHITE}{session_id}{PrintColor.RESET}")
+        bar()
+
+        # 欢迎
+        panel_title("Welcome")
+        print(f"{PrintColor.WHITE}• exit / quit : exit")
+        print(f"{PrintColor.WHITE}• clear       : clear session{PrintColor.RESET}")
+        bar()
+
+        enable_thinking = think
+        test_image_url = "https://ark-project.tos-cn-beijing.ivolces.com/images/view.jpeg" if vision else None
 
         while True:
-            # Reset full response content for each conversation
-            # 在 while True 里面，和 full_response 放一起
+            try:
+                user_input = input(f"\n{PrintColor.GREEN}{PrintColor.BOLD}YOU > {PrintColor.RESET}").strip()
+            except (KeyboardInterrupt, EOFError):
+                print(f"\n{PrintColor.CYAN}👋 Goodbye{PrintColor.RESET}")
+                break
+
+            if user_input.lower() in {"exit", "quit"}:
+                print(f"\n{PrintColor.CYAN}👋 Goodbye{PrintColor.RESET}")
+                break
+
+            if user_input.lower() == "clear":
+                session_manager.delete_session(session_id)
+                print(f"{PrintColor.GREEN}🗑 Session cleared{PrintColor.RESET}")
+                continue
+
+            if not user_input:
+                continue
+
+            session_manager.save_message(session_id, "user", user_input)
+            
+            # ========== 最小化修改：启动异步加载动画 ==========
+            stop_loading = asyncio.Event()
+            # 启动加载动画任务（后台异步，不阻塞）
+            loading_task = asyncio.create_task(async_loading_indicator(stop_loading, "processing"))
+
             full_response = ""
             tool_call_content = ""
             tool_response_content = ""
             retrieval_content = ""
 
-            # ========== 【最小修复】加这两行 ==========
-            complete_ai_message = ""       # 拼接完整AI消息
-            complete_functioncall_message = ""  # 拼接完整工具调用消息
-
-            # Get user input (stylized prompt)
-            try:
-                user_input = input(f"{PrintColor.BOLD}{PrintColor.GREEN}YOU > {PrintColor.RESET}").strip()  
-            except (KeyboardInterrupt, EOFError):
-                print(f"\n\n{PrintColor.CYAN}👋 Goodbye! {PrintColor.RESET}")
-                break
-
-            # Exit logic
-            if user_input.lower() in {"exit", "quit"}:
-                print(f"\n{PrintColor.CYAN}👋 Goodbye! {PrintColor.RESET}")
-                break
-
-            # Clear history
-            if user_input.lower() == "clear":
-                try:
-                    session_manager.delete_session(session_id)
-                    print(f"\n{PrintColor.GREEN}🗑️  Session {session_id} cleared! {PrintColor.RESET}\n")
-                except Exception as e:
-                    print(f"{PrintColor.RED}❌ Failed to clear session: {e}{PrintColor.RESET}")
-                continue
-
-            # Skip empty input
-            if not user_input:
-                continue
-            session_manager.save_message(session_id, "user", user_input)
-
-            print(f"{PrintColor.BOLD}{PrintColor.BLUE}AUTOX > {PrintColor.RESET}", end="", flush=True)
-            
-            # Start interaction (stylized prompt)
             try:
                 async for event in event_generator(
-                    base_dir=base_dir, 
-                    session_id=session_id, 
+                    base_dir=base_dir,
+                    session_id=session_id,
                     enable_thinking=enable_thinking,
                     message=user_input,
                     image_url=test_image_url
                 ):
-                    # Output event content 
-                    if event["type"] == EventType.REASONING_TOKEN_EVENT.value:
-                        print(f"{PrintColor.CYAN}{PrintColor.ITALIC}{event['content']}{PrintColor.RESET}", end="", flush=True)
+                    # 收到第一个事件就停止加载动画
+                    if not stop_loading.is_set():
+                        stop_loading.set()
+                        await loading_task  # 等待动画任务清理完毕
 
+                    # 思考流
+                    if event["type"] == EventType.REASONING_TOKEN_EVENT.value:
+                        print(f"{PrintColor.DIM}{PrintColor.CYAN}{event['content']}{PrintColor.RESET}", end="", flush=True)
+
+                    # 回答流
                     elif event["type"] == EventType.TOKEN_EVENT.value:
                         full_response += event["content"]
                         print(f"{PrintColor.BLUE}{event['content']}{PrintColor.RESET}", end="", flush=True)
 
+                    # 工具调用流
                     elif event["type"] == EventType.TOOL_CALLING_EVENT.value:
                         tool_call_content += event["content"]
                         if DEBUGMODE:
-                            print(f"{PrintColor.ORANGE}{event['content']}{PrintColor.RESET}", end="", flush=True)
+                            print(f"{PrintColor.YELLOW}{event['content']}{PrintColor.RESET}", end="", flush=True)
 
+                    # 工具执行
                     elif event["type"] == EventType.TOOL_EXECUTE_EVENT.value:
-                        print()
-                        print(f"{PrintColor.BOLD}{PrintColor.YELLOW}🛠️  [Tool Execution]{PrintColor.RESET}")
-                        print(f"   {PrintColor.YELLOW}Tool name: {event['tool']}{PrintColor.RESET}")
-                        print(f"   {PrintColor.YELLOW}Input parameters: {str(event['input'])[:80]}{PrintColor.RESET}", flush=True)
+                        print(f"\n{PrintColor.YELLOW}🛠 TOOL: {event['tool']}{PrintColor.RESET}")
+                        print(f"{PrintColor.DIM}Input: {str(event['input'])[:70]}{PrintColor.RESET}")
+                        session_manager.save_message(session_id, "tool_execute", f"Using Tool: {event["tool"]}")
 
+                    # 工具返回
                     elif event["type"] == EventType.TOOL_RESPONSE_MESSAGE.value:
                         tool_response_content += str(event["output"])
-                        print()
-                        print(f"{PrintColor.BOLD}{PrintColor.PURPLE}📊 [Tool Response]{PrintColor.RESET}")
-                        print(f"   {PrintColor.PURPLE}Response result: {str(event['output'])[:120]}{PrintColor.RESET}", flush=True)
+                        print(f"\n{PrintColor.PURPLE}📎 RESULT:{PrintColor.RESET} {str(event["output"])[:100]}{PrintColor.RESET}")
+                        session_manager.save_message(session_id, "tool_response",  event["output"])
 
                     elif event["type"] == EventType.TOOL_EXECUTE_DONE_EVENT.value:
-                        print(f"\n{PrintColor.BOLD}{PrintColor.YELLOW}✅ [Tool Execution Completed]{PrintColor.RESET}\n")
+                        print(f"\n{PrintColor.GREEN}✅ Tool done{PrintColor.RESET}")
 
+                    # 检索
                     elif event["type"] == EventType.RETRIEVAL_EVENT.value:
                         retrieval_content += str(event["results"])
-                        print()
-                        print(f"{PrintColor.BOLD}{PrintColor.BLUE}📚 [RAG Retrieval]{PrintColor.RESET}")
-                        print(f"   {PrintColor.BLUE}Found {len(event['results'])} relevant items{PrintColor.RESET}")
-                        print(f"   {PrintColor.BLUE}Content summary: {event['results']}{PrintColor.RESET}")
+                        print(f"\n{PrintColor.CYAN}📚 Retrieval: {len(event['results'])} items{PrintColor.RESET}")
 
+                    # 全部结束
                     elif event["type"] == EventType.ALL_DONE_EVENT.value:
                         print()
-                        if DEBUGMODE:
-                            print(f"\n{PrintColor.BOLD}{PrintColor.WHITE}📈 Session Statistics {PrintColor.RESET}")
-                            print(f"{PrintColor.CYAN}├── Input length: {len(event['input_content'])}{PrintColor.RESET}")
-                            print(f"{PrintColor.CYAN}├── Reasoning content length: {len(event['reasoning_content'])}{PrintColor.RESET}")
-                            print(f"{PrintColor.CYAN}├── Response content length: {len(event['content'])}{PrintColor.RESET}")
-                            print(f"{PrintColor.CYAN}├── Tool call content length: {len(event['tool_call_content'])}{PrintColor.RESET}")
-                            print(f"{PrintColor.CYAN}├── Tool response content length: {len(event['tool_response_content'])}{PrintColor.RESET}")
-                            print(f"{PrintColor.CYAN}└── Retrieval content length: {len(event['retrieval_content'])}{PrintColor.RESET}")
+                        bar()
 
                     elif event["type"] == EventType.AI_MESSAGE.value:
-                        ai_message = event["content"]
-                        session_manager.save_message(session_id, "assistant", ai_message)  # 直接保存完整内容
-                        
+                        session_manager.save_message(session_id, "assistant", event["content"])
+
                     elif event["type"] == EventType.TOOLCALL_MESSAGE.value:
-                        toolcall_message = event["content"]
-                        session_manager.save_message(session_id, "assistant", toolcall_message)  # 直接保存完整内容
+                        session_manager.save_message(session_id, "assistant", event["content"])
 
-
-
-
-                        
-                        # Stylized separator（换行后输出分隔线）
-                        print(f"\n{PrintColor.BOLD}{PrintColor.BLUE}──────────────────────────────────────────────{PrintColor.RESET}\n")
-                    else: 
-                        print(f"\n{PrintColor.RED}❌ Unknown event type: {event['type']}{PrintColor.RESET}")
             except Exception as e:
-                print(f"\n{PrintColor.RED}❌ [Interaction Error] {type(e).__name__}: {str(e)}{PrintColor.RESET}")
-                print(f"{PrintColor.RED}📝 Error details: {traceback.format_exc()}{PrintColor.RESET}")
+                # 异常时停止加载动画
+                if not stop_loading.is_set():
+                    stop_loading.set()
+                    await loading_task
+                print(f"\n{PrintColor.RED}❌ Error: {e}{PrintColor.RESET}")
+                traceback.print_exc()
                 continue
+
     except Exception as e:
-        print(f"\n{PrintColor.RED}💥 [Main Function Error] {type(e).__name__}: {str(e)}{PrintColor.RESET}")
-        print(f"{PrintColor.RED}📝 Full error information:\n{traceback.format_exc()}{PrintColor.RESET}")
+        print(f"\n{PrintColor.RED}💥 Crash: {e}{PrintColor.RESET}")
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
-    # Ultimate error capture
     try:
         asyncio.run(main())
     except Exception as e:
-        print(f"\n{PrintColor.RED}💥 [Program Crash] {type(e).__name__}: {str(e)}{PrintColor.RESET}")
-        print(f"{PrintColor.RED}📝 Full stack trace:\n{traceback.format_exc()}{PrintColor.RESET}")
+        print(f"\n{PrintColor.RED}Fatal: {e}{PrintColor.RESET}")
+        traceback.print_exc()
         sys.exit(1)
-
-
-""" 
-before: {'messages': [AIMessage(content="I will...", additional_kwargs={}, response_metadata={'finish_reason': 'tool_calls', 'model_name': 'deepseek-chat', 'system_fingerprint': 'fp_eaab8d114b_prod0820_fp8_kvcache', 'model_provider': 'openai'}, id='lc_run--019cd0ef-09ed-7c11-bcf8-5e74cc165338', tool_calls=[{'name': 'terminal', 'args': {'command': 'ls -la'}, 'id': 'call_00_7o4j7y6MHeIbKr6dVqIXFgpS', 'type': 'tool_call'}], invalid_tool_calls=[], usage_metadata={'input_tokens': 7230, 'output_tokens': 64, 'total_tokens': 7294, 'input_token_details': {'cache_read': 7168}, 'output_token_details': {}})]}
-after: {'messages': [AIMessage(content="here's the...", additional_kwargs={}, response_metadata={'finish_reason': 'stop', 'model_name': 'deepseek-chat', 'system_fingerprint': 'fp_eaab8d114b_prod0820_fp8_kvcache', 'model_provider': 'openai'}, id='lc_run--019cd0ef-1b2b-77e1-95eb-b6fda6f1bb85', tool_calls=[], invalid_tool_calls=[], usage_metadata={'input_tokens': 7612, 'output_tokens': 249, 'total_tokens': 7861, 'input_token_details': {'cache_read': 7488}, 'output_token_details': {}})]}
-"""

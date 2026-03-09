@@ -293,7 +293,7 @@ class AgentManager:
                                     yield {
                                         "type": "tool_response",
                                         "tool": tool_msg.name,
-                                        "output": output_msg[:2000],
+                                        "output": output_msg[:1000],
                                     }
                             tools_just_finished = True
                         

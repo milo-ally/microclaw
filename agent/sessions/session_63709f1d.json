@@ -1,0 +1,11 @@
+{
+  "title": "New Chat",
+  "created_at": 1773061125.095183,
+  "updated_at": 1773061125.095183,
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello, run ls -la"
+    }
+  ]
+}

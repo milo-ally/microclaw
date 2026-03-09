@@ -1,6 +1,6 @@
 ---
 name: task-planner
-description: 帮助用户进行复杂任务规划、分解和跟踪的技能。当用户提出复杂需求、多步骤项目或需要系统化管理的任务时使用此技能。使用场景包括：项目规划、任务分解、进度跟踪、资源分配、时间估算等。当用户说"这个任务很复杂"、"需要规划一下"、"帮我分解任务"、"制定项目计划"、"项目管理"、"任务跟踪"、"进度管理"时，使用此技能。优先使用内置脚本工具来减少模型负担，提高执行效率。
+description: Follow the skills' detail when user ask you to plan. Creating a json file to help you form a todo list, use mentioned python scripts to update the todo list. 
 ---
 
 # 任务规划技能
@@ -113,7 +113,7 @@ python ./skills/task-planner/scripts/create_task_plan.py report tasks.json
       "status": "pending|in_progress|completed|blocked",
       "priority": "high|medium|low",
       "dependencies": ["task_2", "task_3"],
-      "estimated_time": "2h",
+      "estimated_time": "10min",
       "actual_time": "",
       "assigned_to": "",
       "notes": "",
