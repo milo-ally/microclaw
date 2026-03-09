@@ -7,7 +7,7 @@
     "info": {
       "model": "deepseek-chat",
       "base_url": "https://api.deepseek.com",
-      "api_key": "sk-f7bd38a78ea441b299ad0322673bd0c6", 
+      "api_key": "sk-xxxxxxxxxxxxxxxx", 
       "temperature": 0.2, 
       "enable_thinking": false, 
       "is_vision_model": false
@@ -19,7 +19,7 @@
     "info": {
         "model": "text-embedding-v3", 
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", 
-        "api_key": "sk-948b33ec95a749aa87acb055585e63ca"
+        "api_key": "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
     }
   }, 
   "tools": {
@@ -34,14 +34,14 @@
     },
     "sql_tools": {
       "status": "on",
-      "db_uri": "postgresql+psycopg2://milo:milo_2357@localhost:5432/testdb"
+      "db_uri": "postgresql+psycopg2://username:password@localhost:5432/testdb"
     },
     "read_file_tool": {
       "status": "on"
     },
     "tavily_search_tool" :{
       "status": "on", 
-      "tavily_api_key": "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"
+      "tavily_api_key": "tvly-dev-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
     }, 
     "terminal_tool": {
       "status": "on"
