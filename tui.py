@@ -111,95 +111,16 @@ def pause(msg: str = "Press Enter to continue") -> None:
     input(f"\n{msg}...")
 
 
-SLASH_HINT = "  /sessions | /clear | /help"
+SLASH_HINT = "  /sessions | /clear | /session | /health | /config | /delete | /menu | /help"
 CMD_COLOR = "36"  # cyan for slash commands
 
 
 def _chat_input() -> str:
     """
-    Custom input for chat: when line starts with '/', show colored text + real-time hint.
-    Hint appears on a separate line below the input. Falls back to standard input() when not a TTY.
+    Chat input using standard input() - reliable, no raw mode.
+    The '/' and all typed text are always visible.
     """
-    if not sys.stdout.isatty() or not sys.stdin.isatty():
-        return input(_c("\nYou > ", "36;1")).rstrip("\n")
-
-    try:
-        import tty
-        import termios
-    except ImportError:
-        return input(_c("\nYou > ", "36;1")).rstrip("\n")
-
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    buf: list[str] = []
-    hint_shown = False
-
-    def getch() -> str:
-        return sys.stdin.read(1)
-
-    def show_hint() -> None:
-        nonlocal hint_shown
-        if hint_shown:
-            return
-        # Move to next line, start of line, write hint, then restore cursor to input
-        sys.stdout.write("\033[1B\r")  # down, start of line
-        sys.stdout.write(_c(SLASH_HINT, "90"))
-        sys.stdout.write("\033[1A")  # up
-        # Restore cursor to end of input: "You > " (6 chars) + buf
-        n = 6 + len(buf)
-        sys.stdout.write(f"\r\033[{n}C")  # start of line, then move right n
-        sys.stdout.flush()
-        hint_shown = True
-
-    def clear_hint() -> None:
-        nonlocal hint_shown
-        if not hint_shown:
-            return
-        sys.stdout.write("\033[1B\033[2K\033[1A")  # down, clear line, up
-        n = 6 + len(buf)
-        sys.stdout.write(f"\r\033[{n}C")  # restore cursor to end of input
-        sys.stdout.flush()
-        hint_shown = False
-
-    sys.stdout.write(_c("\nYou > ", "36;1"))
-    sys.stdout.flush()
-
-    try:
-        tty.setraw(fd)
-        while True:
-            ch = getch()
-            if ch in ("\r", "\n"):
-                clear_hint()
-                sys.stdout.write("\n")
-                sys.stdout.flush()
-                return "".join(buf)
-            if ch == "\x7f" or ch == "\x08":  # backspace
-                if buf:
-                    buf.pop()
-                    sys.stdout.write("\b \b")
-                    sys.stdout.flush()
-                    if not "".join(buf).strip().startswith("/"):
-                        clear_hint()
-            elif ch == "\x03":  # Ctrl+C
-                raise KeyboardInterrupt
-            elif ch == "\x04":  # Ctrl+D
-                if not buf:
-                    clear_hint()
-                    sys.stdout.write("\n")
-                    sys.stdout.flush()
-                    return ""
-                # else treat as literal
-            else:
-                buf.append(ch)
-                if "".join(buf).strip().startswith("/"):
-                    sys.stdout.write(_c(ch, CMD_COLOR))
-                    show_hint()
-                else:
-                    sys.stdout.write(ch)
-                    clear_hint()
-                sys.stdout.flush()
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return input(_c("\nYou > ", "36;1")).rstrip("\n")
 
 
 T = TypeVar("T")
@@ -609,7 +530,7 @@ def flow_chat(client: GatewayClient) -> None:
     image_url = image_url.strip() or None
 
     print()
-    info("Type your message. Empty line to go back. Start with / for commands.")
+    info("Type your message. empty=back. Slash: /sessions /clear /session /health /config /delete /menu /help")
     while True:
         user_msg = _chat_input()
         if not user_msg.strip():
@@ -641,17 +562,67 @@ def flow_chat(client: GatewayClient) -> None:
             if cmd == "/clear":
                 try:
                     with spinner(f"Clearing session '{session_id}'"):
-                        out = client.clear_session(session_id)
+                        client.clear_session(session_id)
                     info(f"Session '{session_id}' cleared.")
                 except Exception as e:
                     err(str(e))
                 continue
+            if cmd == "/session":
+                parts = user_msg.strip().split(maxsplit=1)
+                new_id = parts[1].strip() if len(parts) > 1 else prompt("session_id", session_id)
+                if new_id:
+                    session_id = new_id
+                    info(f"Switched to session '{session_id}'")
+                continue
+            if cmd == "/health":
+                try:
+                    with spinner("Checking gateway"):
+                        h = client.health()
+                    section("Gateway health")
+                    print(pretty_json(h))
+                except Exception as e:
+                    err(str(e))
+                continue
+            if cmd == "/config":
+                try:
+                    with spinner("Loading config"):
+                        cfg = client.get_config()
+                    section("Config (brief)")
+                    for k in ("platform", "base_dir", "rag_mode", "llm", "embeddings"):
+                        if k in cfg:
+                            v = cfg[k]
+                            s = json.dumps(v, ensure_ascii=False) if isinstance(v, dict) else str(v)
+                            if len(s) > 100:
+                                s = s[:97] + "..."
+                            print(f"  {k}: {s}")
+                except Exception as e:
+                    err(str(e))
+                continue
+            if cmd == "/delete":
+                parts = user_msg.strip().split(maxsplit=1)
+                sid_del = parts[1].strip() if len(parts) > 1 else prompt("session_id to delete", "")
+                if sid_del:
+                    try:
+                        with spinner(f"Deleting '{sid_del}'"):
+                            client.delete_session(sid_del)
+                        info(f"Session '{sid_del}' deleted.")
+                    except Exception as e:
+                        err(str(e))
+                continue
+            if cmd == "/menu":
+                info("Back to main menu.")
+                return
             if cmd == "/help":
                 print()
                 print(_c("Slash commands:", "35;1"))
-                print("  /sessions   List recent sessions")
-                print("  /clear      Clear messages in current session")
-                print("  /help       Show this help")
+                print("  /sessions        List recent sessions")
+                print("  /clear           Clear messages in current session")
+                print("  /session [id]    Switch session")
+                print("  /health          Gateway health check")
+                print("  /config          Show brief config")
+                print("  /delete [id]     Delete a session")
+                print("  /menu            Back to main menu")
+                print("  /help            Show this help")
                 print()
                 continue
             warn(f"Unknown slash command: {cmd}. Use /help for available commands.")
