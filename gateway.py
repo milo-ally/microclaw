@@ -67,7 +67,35 @@ class ChatStreamRequest(BaseModel):
 def _ensure_runtime_initialized(base_dir: Path) -> None:
     """
     Initialize agent and session storage. Safe to call multiple times.
+
+    On first run (or when new files are added under the agent/ template),
+    ensure that all contents from the agent template directory are present
+    under the configured base_dir. Existing user files are never overwritten.
     """
+    template = CONFIG_FILE.parent / "agent"
+    if not template.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Template not found: {template}. Cannot initialize workspace.",
+        ) from None
+
+    base_dir = base_dir.resolve()
+    # 1) If base_dir does not exist at all, create it from template (fresh workspace)
+    if not base_dir.exists():
+        _init_workspace_from_template(base_dir)
+    else:
+        # 2) If base_dir exists, make sure every file/dir from template exists there.
+        #    We only copy missing files, never overwrite user-edited ones.
+        for src in template.rglob("*"):
+            rel = src.relative_to(template)
+            dst = base_dir / rel
+            if src.is_dir():
+                dst.mkdir(parents=True, exist_ok=True)
+            else:
+                if not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+
     session_manager.initialize(base_dir)
     agent_manager.initialize(base_dir=base_dir)
     scan_skills(base_dir=base_dir)
