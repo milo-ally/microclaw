@@ -62,7 +62,9 @@ def set_embeddings_config(embeddings_config: dict[str, Any]) -> None:
 def get_base_dir() -> str:
     """Get base directory (project root) from configuration."""
     base_dir = load_config().get("base_dir")
-    return Path(base_dir).resolve()
+    if base_dir is None or (isinstance(base_dir, str) and not str(base_dir).strip()):
+        raise ValueError("base_dir is not configured in config.json. Please set it.")
+    return str(Path(str(base_dir)).resolve())
 
 def set_base_dir(base_dir: str) -> None:
     """Set the base directory in configuration."""

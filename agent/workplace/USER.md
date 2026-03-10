@@ -1,10 +1,10 @@
 # USER.md - About Your Human
 
 ## Basic Info
-- **Name**: milo
-- **How to address**: milo
-- **Timezone**: (待确认)
-- **Contact preferences**: (待确认)
+- **Name**: ...
+- **How to address**: ...
+- **Timezone**: ...
+- **Contact preferences**: ...
 
 ## Context & Preferences
 *(To be discovered through conversation)*

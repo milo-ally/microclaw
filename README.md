@@ -46,16 +46,20 @@ pip install -r requirements.txt
 
 将 `example` 文件夹下的 `config.json` 文件放在项目根目录下, 填写相应信息。(注意AI网关统一用openai格式调用, 包括embedding模型, chat模型等。 )
 
-### 4. 启动（推荐：网关 + microclaw TUI）
+### 4. 启动（推荐：microclaw 一键启动）
 
 ```bash
-# 1) 启动网关（FastAPI）
-python run_gateway.py
+# 安装
+pip install -e .
 
-# 2) 另开一个终端启动 microclaw（TUI）
-python tui.py
+# TUI 模式（终端界面）
+microclaw tui
+microclaw tui --port 7132
+microclaw tui -- port 7132
 
-# 可选：指定网关地址（默认 http://127.0.0.1:8000）
-MICROCLAW_GATEWAY=http://127.0.0.1:8000 python tui.py
+# GUI 模式（Gradio 网页界面：流式对话、配置、会话、workplace/memory 文件编辑）
+microclaw gui
+microclaw gui -- port 7132
+microclaw gui --port 7132 --gui-port 7860
 ```
 

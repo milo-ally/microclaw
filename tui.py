@@ -265,6 +265,10 @@ class GatewayClient:
     def clear_session(self, session_id: str) -> dict[str, Any]:
         return self._request_json("POST", f"/api/sessions/{urllib.parse.quote(session_id)}/clear")
 
+    def cleanup_workspace(self) -> dict[str, Any]:
+        """Remove workspace files/dirs except memory, sessions, skills, storage, workplace."""
+        return self._request_json("POST", "/api/cleanup", body={})
+
     def chat_stream_lines(self, payload: dict[str, Any]) -> Iterable[str]:
         """
         Connect to SSE endpoint and yield decoded lines.
@@ -520,17 +524,23 @@ def flow_sessions(client: GatewayClient) -> None:
         pause()
 
 
+def _new_session_id() -> str:
+    """Generate a unique session ID for new chat."""
+    return f"session_{time.strftime('%Y%m%d_%H%M%S')}"
+
+
 def flow_chat(client: GatewayClient) -> None:
     title("microclaw · Chat (streaming)")
     show_openai_compat_notice()
 
-    session_id = prompt("session_id", "default")
+    session_id = _new_session_id()
+    info(f"New session: {session_id}")
     show_reasoning = prompt_bool("Show reasoning tokens (if any)", False)
     image_url = prompt("image_url (optional)", "")
     image_url = image_url.strip() or None
 
     print()
-    info("Type your message. empty=back. Slash: /sessions /clear /session /health /config /delete /menu /help")
+    info("Type your message. empty=back. Slash: /sessions /clear /session /health /config /delete /clean /menu /help")
     while True:
         user_msg = _chat_input()
         if not user_msg.strip():
@@ -573,6 +583,25 @@ def flow_chat(client: GatewayClient) -> None:
                 if new_id:
                     session_id = new_id
                     info(f"Switched to session '{session_id}'")
+                    try:
+                        with spinner(f"Loading session '{session_id}'"):
+                            raw = client.get_session(session_id)
+                        msgs = raw.get("messages", [])
+                        if msgs:
+                            section("Recent context")
+                            for m in msgs[-6:]:  # last 6 messages
+                                role = m.get("role", "")
+                                content = (m.get("content", "") or "").strip()
+                                if len(content) > 200:
+                                    content = content[:197] + "..."
+                                if role == "user":
+                                    print(_c("You:", "36") + f" {content}")
+                                else:
+                                    print(_c("Assistant:", "32") + f" {content}")
+                        else:
+                            info("(empty session)")
+                    except Exception as e:
+                        warn(f"Could not load history: {e}")
                 continue
             if cmd == "/health":
                 try:
@@ -609,6 +638,20 @@ def flow_chat(client: GatewayClient) -> None:
                     except Exception as e:
                         err(str(e))
                 continue
+            if cmd == "/clean":
+                if not prompt_bool("Clean workspace? Remove all except memory/sessions/skills/storage/workplace", False):
+                    continue
+                try:
+                    with spinner("Cleaning workspace"):
+                        out = client.cleanup_workspace()
+                    removed = out.get("removed", [])
+                    if removed:
+                        info(f"Removed: {', '.join(removed)}")
+                    else:
+                        info("Nothing to remove (workspace already clean).")
+                except Exception as e:
+                    err(str(e))
+                continue
             if cmd == "/menu":
                 info("Back to main menu.")
                 return
@@ -621,6 +664,7 @@ def flow_chat(client: GatewayClient) -> None:
                 print("  /health          Gateway health check")
                 print("  /config          Show brief config")
                 print("  /delete [id]     Delete a session")
+                print("  /clean           Clean workspace (keep memory/sessions/skills/storage/workplace)")
                 print("  /menu            Back to main menu")
                 print("  /help            Show this help")
                 print()

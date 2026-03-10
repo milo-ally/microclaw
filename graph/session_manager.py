@@ -184,34 +184,65 @@ class SessionManager:
             data["compressed_context"] = summary 
         self._write_file(session_id, data)
 
-    def load_session_for_agent(self, session_id: str) -> dict[str, Any]:
-        """ 
-        Load session history messages for agent processing, 
+    def compress_history_to_system_message(
+        self, session_id: str, summary: str, num_to_compress: int
+    ) -> None:
+        """
+        Replace first N messages with a single system message: [History Summary].
+        Used when message count exceeds 50 - compress first 50% into one system message.
         """
         data = self._read_file(session_id)
-        messages = data.get("messages", []) if data else [] 
+        if not data:
+            return
+        messages = data.get("messages", [])
+        if num_to_compress <= 0 or num_to_compress > len(messages):
+            return
+        summary_msg: dict[str, Any] = {
+            "role": "system",
+            "content": f"[History Summary]: {summary}",
+        }
+        data["messages"] = [summary_msg] + messages[num_to_compress:]
+        data["updated_at"] = time.time()
+        self._write_file(session_id, data)
 
-        merged: list[dict[str, Any]] = []  
-        compressed = data.get("compressed_context", "") if data else ""  
+    def load_session_for_agent(self, session_id: str) -> list[dict[str, Any]]:
+        """
+        Load session history messages for agent processing.
+        
+        - Keep each stored message as an independent turn (no merging of assistant chunks),
+          so that what the agent sees is consistent with the streamed event log.
+        - Prepend an optional system message when compressed_context is present.
+        - Ignore internal/tool-only roles when building the agent-facing history.
+        """
+        data = self._read_file(session_id)
+        messages = data.get("messages", []) if data else []
+        history: list[dict[str, Any]] = []
+
+        # If there is a compressed summary, expose it as a single system message
+        compressed = data.get("compressed_context", "") if data else ""
         if compressed:
-            merged.append({
-                "role": "assistant", 
-                "content": f"Here is the summary of the previous conversation:\n {compressed}"
-            })
-        for msg in messages: 
-            if (
-                merged
-                and merged[-1]["role"] == "assistant"
-                and msg["role"] == "assistant"
-            ): 
-                # Combine assistant messages
-                merged[-1]["content"] = (merged[-1].get("content", "") or "") + "\n" + (msg.get("content") or "")
-            else:
-                merged.append({
-                    "role": msg["role"],
-                    "content": msg.get("content", ""),
-                })
-        return merged 
+            history.append(
+                {
+                    "role": "system",
+                    "content": f"[History Summary]: {compressed}",
+                }
+            )
+
+        for msg in messages:
+            role = msg.get("role") or ""
+            content = msg.get("content", "") or ""
+
+            if not content:
+                continue
+
+            history.append(
+                {
+                    "role": role,
+                    "content": content,
+                }
+            )
+
+        return history
 
 
     def get_session_count(self, session_id: str) -> int:
@@ -219,7 +250,21 @@ class SessionManager:
         data = self._read_file(session_id) 
         if not data: 
             return 0 
-        return len(data.get("messages", [])) 
+        return len(data.get("messages", []))
+
+    def get_messages_to_compress(self, session_id: str) -> tuple[list[dict[str, Any]], int]:
+        """
+        When message count > 50, return (first_50_percent_messages, num_to_compress).
+        Otherwise return ([], 0).
+        """
+        data = self._read_file(session_id)
+        if not data:
+            return [], 0
+        messages = data.get("messages", [])
+        if len(messages) <= 50:
+            return [], 0
+        num_to_compress = len(messages) // 2  # first 50%
+        return messages[:num_to_compress], num_to_compress 
 
 
 session_manager = SessionManager()

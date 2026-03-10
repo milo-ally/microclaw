@@ -1,6 +1,5 @@
 from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.messages import AIMessageChunk, ToolMessageChunk, ToolCallChunk
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from deepagents import create_deep_agent
 
 from typing import AsyncGenerator, Any, Optional
@@ -43,6 +42,33 @@ class AgentManager:
         session_manager.initialize(base_dir)
         # print(f"Agent initialized by using model: {llm_info.get('model')}, loaded tools number: {len(self._tools)}")
 
+    async def summarize_messages(self, messages: list[dict[str, Any]]) -> str:
+        """
+        Use LLM to summarize a list of conversation messages into a concise history summary.
+        Used when compressing history (first 50% of messages when count > 50).
+        """
+        if not messages or not self._model:
+            return ""
+        parts: list[str] = []
+        for m in messages:
+            role = m.get("role", "unknown")
+            content = m.get("content", "")
+            if isinstance(content, str) and content.strip():
+                parts.append(f"[{role}]: {content.strip()}")
+        if not parts:
+            return ""
+        text = "\n\n".join(parts)
+        prompt = f"""Summarize the following conversation history concisely in the same language. Preserve key facts, decisions, and context. Keep it under 2000 characters.
+
+Conversation:
+{text}
+
+Summary:"""
+        try:
+            resp = await self._model.ainvoke([HumanMessage(content=prompt)])
+            return (resp.content or "").strip()
+        except Exception:
+            return ""
 
     def _build_agent(self): 
         """Build agent with model and tools"""
@@ -80,7 +106,15 @@ class AgentManager:
         hist = history if isinstance(history, list) else []
         for msg in hist:
             role = msg.get("role", "")
-            content = msg.get("content", "")
+            content = msg.get("content", "") or ""
+            
+            if not content:
+                continue
+
+            # System message (e.g. [History Summary] from compression)
+            if role == "system":
+                messages.append(SystemMessage(content=content))
+                continue
             
             # User message
             if role == "user":
@@ -93,12 +127,26 @@ class AgentManager:
                     messages.append(HumanMessage([
                         {"type": "text", "text": content}
                     ]))
+                continue
             
             # Assistant message
-            elif role == "assistant":
+            if role == "assistant":
                 messages.append(AIMessage([
                     {"type": "text", "text": content}
                 ]))
+                continue
+
+            # Tool-related messages and other custom roles
+            if role in {"tool_call", "tool_response"}:
+                messages.append(AIMessage([
+                    {"type": "text", "text": f"[{role}] {content}"}
+                ]))
+                continue
+
+            # 其它自定义角色：同样当作 assistant 消息，并标注原 role
+            messages.append(AIMessage([
+                {"type": "text", "text": f"[{role}] {content}"}
+            ]))
             
         messages.append(HumanMessage([
             {"type": "text", "text": user_message}, 
@@ -255,6 +303,7 @@ class AgentManager:
             elif mode == "updates":
                 if isinstance(data, dict):
                     for node_name, node_data in data.items():
+                        
                         # 输出完整的正常ai消息内容
                         if node_name == "model" and "messages" in node_data: 
                             for ai_msg in node_data["messages"]: 
@@ -305,7 +354,7 @@ class AgentManager:
                                         input_msg = str(tc.get("args", ""))
                                         tool_call_content += input_msg
                                         yield {
-                                            "type": "tool_execute",
+                                            "type": "tool_call",
                                             "tool": tc["name"],
                                             "input": input_msg[:1000],
                                         }

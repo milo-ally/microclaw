@@ -43,5 +43,6 @@ psycopg2-binary
 # deepagents
 deepagents
 
-# tui requirements
+# tui / gui
+gradio>=4.0.0
 
