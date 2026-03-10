@@ -36,13 +36,12 @@ fastapi==0.133.1
 uvicorn==0.41.0
 sse-starlette==3.2.0
 
-# pyfiglet 
-termcolor==3.3.0
-pyfiglet==1.0.4
-
 # postgresql
 sqlalchemy
 psycopg2-binary
 
 # deepagents
 deepagents
+
+# tui requirements
+

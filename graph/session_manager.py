@@ -105,6 +105,21 @@ class SessionManager:
         if path.exists():
             path.unlink()
 
+    def clear_messages(self, session_id: str) -> None:
+        """Clear all messages in a session, keep the session file."""
+        data = self._read_file(session_id)
+        if not data:
+            now = time.time()
+            data = {
+                "title": "New Chat",
+                "created_at": now,
+                "updated_at": now,
+                "messages": [],
+            }
+        data["messages"] = []
+        data["updated_at"] = time.time()
+        self._write_file(session_id, data)
+
     def get_raw_messages(self, session_id: str) -> dict[str, Any]:
         """Get raw session data (title, messages, etc.)"""
         data = self._read_file(session_id)

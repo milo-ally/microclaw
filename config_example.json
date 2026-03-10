@@ -1,5 +1,5 @@
 {
-  "platform": "Ubuntu-24.04",
+  "platform": "Ubuntu24.04",
   "base_dir": "/home/milo/learnspace/AI_Application/Agent/ComputerUseAgent/agent",
   "llm": {
     "provider": "deepseek",
@@ -7,7 +7,7 @@
     "info": {
       "model": "deepseek-chat",
       "base_url": "https://api.deepseek.com",
-      "api_key": "sk-xxxxxxxxxxxxxxxx", 
+      "api_key": "sk-38127af1550249758915b4bca7a8d9a1", 
       "temperature": 0.2, 
       "enable_thinking": false, 
       "is_vision_model": false
@@ -19,7 +19,7 @@
     "info": {
         "model": "text-embedding-v3", 
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", 
-        "api_key": "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+        "api_key": "sk-xxxxxxxxxxxxxxxxxxx"
     }
   }, 
   "tools": {
@@ -33,18 +33,18 @@
       "status": "on"
     },
     "sql_tools": {
-      "status": "on",
-      "db_uri": "postgresql+psycopg2://username:password@localhost:5432/testdb"
+      "status": "off",
+      "db_uri": "postgresql+psycopg2://xxxx:xxxx@localhost:5432/testdb"
     },
     "read_file_tool": {
       "status": "on"
     },
     "tavily_search_tool" :{
       "status": "on", 
-      "tavily_api_key": "tvly-dev-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      "tavily_api_key": "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"
     }, 
     "terminal_tool": {
-      "status": "on"
+        "status": "on"
     }
   },
   "rag_mode": false,
@@ -53,7 +53,6 @@
       "transport": "streamable-http", 
       "url": "http://127.0.0.1:12306/mcp"
     }, 
-  "deepagent": true
+  "deepagent": false
   }
 }
-

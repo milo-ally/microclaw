@@ -46,9 +46,16 @@ pip install -r requirements.txt
 
 将 `example` 文件夹下的 `config.json` 文件放在项目根目录下, 填写相应信息。(注意AI网关统一用openai格式调用, 包括embedding模型, chat模型等。 )
 
-### 4. 启动
+### 4. 启动（推荐：网关 + microclaw TUI）
 
 ```bash
-python app.py
+# 1) 启动网关（FastAPI）
+python run_gateway.py
+
+# 2) 另开一个终端启动 microclaw（TUI）
+python tui.py
+
+# 可选：指定网关地址（默认 http://127.0.0.1:8000）
+MICROCLAW_GATEWAY=http://127.0.0.1:8000 python tui.py
 ```
 
