@@ -1,6 +1,6 @@
 # Microclaw
 ## 极速开始
-windows: 双击install.bat (确保已经正确配置python基础环境, 确保python命令, pip命令可用。) <br>
+windows: <br>双击install.bat (确保已经正确配置python基础环境, 确保python命令, pip命令可用。) <br>
 Linux: 
 ```bash
 chmod +x install.sh
