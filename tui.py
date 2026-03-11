@@ -396,8 +396,8 @@ def _edit_provider_block(kind: str, block: dict[str, Any]) -> dict[str, Any]:
             info_block["temperature"] = float(temp_str)
         except Exception:
             warn("Invalid temperature; keeping previous value.")
-        info_block["enable_thinking"] = prompt_bool(
-            f"{kind}.info.enable_thinking", bool(info_block.get("enable_thinking", False))
+        info_block["is_reasoning_model"] = prompt_bool(
+            f"{kind}.info.is_reasoning_model", bool(info_block.get("is_reasoning_model", False))
         )
         info_block["is_vision_model"] = prompt_bool(
             f"{kind}.info.is_vision_model", bool(info_block.get("is_vision_model", False))
@@ -675,7 +675,7 @@ def flow_chat(client: GatewayClient) -> None:
         payload = {
             "session_id": session_id,
             "message": user_msg,
-            "enable_thinking": False,
+            "is_reasoning_model": False,
             "image_url": image_url,
         }
 

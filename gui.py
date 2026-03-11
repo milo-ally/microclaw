@@ -9,6 +9,11 @@ Features (parity with TUI):
   - File editor: workplace/*.md, memory/MEMORY.md
 """
 
+# NOTE:
+# This project expects OpenAI-compatible providers. In config.json:
+# - llm.format must be "openai"
+# - embeddings.format must be "openai"
+
 from __future__ import annotations
 
 import argparse
@@ -81,7 +86,7 @@ class GatewayClient:
         return self._request_json("POST", f"/api/sessions/{urllib.parse.quote(session_id)}/clear")
 
     def chat_stream(self, payload: dict[str, Any]) -> Generator[tuple[str, str], None, None]:
-        """Yield (role, chunk) for streaming display."""
+        """Yield (role, chunk) for streaming display with beautified tool info."""
         url = self._url("/api/chat/stream")
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(
@@ -112,9 +117,9 @@ class GatewayClient:
                         if event_name == "error":
                             try:
                                 obj = json.loads(data)
-                                yield ("assistant", f"<span style='color:#c22'>Error: {obj.get('content', data)}</span>")
+                                yield ("assistant", f"<div class='error-box'>❌ Error: {obj.get('content', data)}</div>")
                             except Exception:
-                                yield ("assistant", f"<span style='color:#c22'>Error: {data}</span>")
+                                yield ("assistant", f"<div class='error-box'>❌ Error: {data}</div>")
                             event_name = "message"
                             continue
                         if event_name == "end":
@@ -130,36 +135,93 @@ class GatewayClient:
                         if et == "token":
                             yield ("assistant", content)
                         elif et == "reasoning_token":
-                            yield ("assistant", f"<span style='color:#888'>{content}</span>")
-
+                            yield ("assistant", f"<span class='reasoning-text'>{content}</span>")
 
                         elif et == "tool_calling":
-                            # Don't stream raw tool-calling args (often large JSON).
-                            # Tool execution status is handled separately via tool_execute/tool_response events.
                             continue
+                        
                         elif et == "toolcall_message":
-                            # Don't surface internal toolcall messages (often verbose JSON / system prompts).
-                            # GUI 只展示上层助手回复和精简的工具状态，由 _chat_stream_ui 控制。
                             pass
                         
                         elif et == "tool_execute":
+                            # 美化工具执行展示
                             tname = obj.get("tool", "")
                             tin = obj.get("input", "")
-                            yield ("assistant", f"<span style='color:#36c'>[tool] {tname}: {str(tin)[:80]}...</span>\n")
-                        
+                            # 格式化工具输入（JSON 美化）
+                            try:
+                                if isinstance(tin, dict):
+                                    tin_formatted = json.dumps(tin, ensure_ascii=False, indent=2)
+                                else:
+                                    tin_formatted = str(tin)
+                            except:
+                                tin_formatted = str(tin)
+                            
+                            # 构建美化的工具执行卡片
+                            tool_card = f"""
+<div class='tool-card tool-executing'>
+  <div class='tool-header'>
+    <span class='tool-icon'>🔧</span>
+    <span class='tool-name'>{tname}</span>
+    <span class='tool-status'>Executing</span>
+  </div>
+  <div class='tool-content'>
+    <div class='tool-label'>Input:</div>
+    <pre class='tool-pre'>{tin_formatted[:200]}...</pre>
+  </div>
+</div>
+"""
+                            yield ("assistant", tool_card)
+                            
                         elif et == "tool_response":
+                            # 美化工具响应展示
                             tname = obj.get("tool", "")
                             tout = obj.get("output", "")
-
-                            yield ("assistant", f"<span style='color:#2a2'>[done] {tname}: {str(tout)[:80]}...</span>\n")
+                            # 格式化工具输出
+                            try:
+                                if isinstance(tout, dict):
+                                    tout_formatted = json.dumps(tout, ensure_ascii=False, indent=2)
+                                else:
+                                    tout_formatted = str(tout)
+                            except:
+                                tout_formatted = str(tout)
+                            
+                            # 构建美化的工具响应卡片
+                            tool_card = f"""
+<div class='tool-card tool-success'>
+  <div class='tool-header'>
+    <span class='tool-icon'>✅</span>
+    <span class='tool-name'>{tname}</span>
+    <span class='tool-status'>Completed</span>
+  </div>
+  <div class='tool-content'>
+    <div class='tool-label'>Output:</div>
+    <pre class='tool-pre'>{tout_formatted[:300]}...</pre>
+  </div>
+</div>
+"""
+                            yield ("assistant", tool_card)
                         elif et == "retrieval":
+                            # 美化 RAG 检索展示
                             results = obj.get("results") or []
                             if results:
-                                parts = ["<span style='color:#888'>[RAG]</span>"]
-                                for r in results[:3]:
-                                    text = (r.get("text") or "")[:100]
-                                    parts.append(f"• {text}...")
-                                yield ("assistant", "\n".join(parts) + "\n")
+                                rag_items = []
+                                for i, r in enumerate(results[:3], 1):
+                                    text = (r.get("text") or "")[:150]
+                                    rag_items.append(f"<div class='rag-item'>{i}. {text}...</div>")
+                                
+                                rag_card = f"""
+<div class='tool-card tool-rag'>
+  <div class='tool-header'>
+    <span class='tool-icon'>📚</span>
+    <span class='tool-name'>RAG Retrieval</span>
+    <span class='tool-status'>Found {len(results)} results</span>
+  </div>
+  <div class='tool-content rag-content'>
+    {''.join(rag_items)}
+  </div>
+</div>
+"""
+                                yield ("assistant", rag_card)
                         elif et == "all_done":
                             pass
                     event_name = "message"
@@ -246,7 +308,7 @@ def _config_load_to_form() -> tuple:
     llm_base_url = str(llm_info.get("base_url", ""))
     llm_api_key = str(llm_info.get("api_key", ""))
     llm_temperature = float(llm_info.get("temperature", 0.1))
-    llm_enable_thinking = bool(llm_info.get("enable_thinking", False))
+    llm_is_reasoning_model = bool(llm_info.get("is_reasoning_model", False))
     llm_is_vision = bool(llm_info.get("is_vision_model", False))
 
     emb = cfg.get("embeddings") or {}
@@ -278,7 +340,7 @@ def _config_load_to_form() -> tuple:
         llm_base_url,
         llm_api_key,
         llm_temperature,
-        llm_enable_thinking,
+        llm_is_reasoning_model,
         llm_is_vision,
         emb_provider,
         emb_model,
@@ -300,7 +362,7 @@ def _config_save_from_form(
     llm_base_url: str,
     llm_api_key: str,
     llm_temperature: float,
-    llm_enable_thinking: bool,
+    llm_is_reasoning_model: bool,
     llm_is_vision: bool,
     emb_provider: str,
     emb_model: str,
@@ -340,7 +402,7 @@ def _config_save_from_form(
                 "base_url": _s(llm_base_url),
                 "api_key": _s(llm_api_key),
                 "temperature": float(llm_temperature or 0.1),
-                "enable_thinking": bool(llm_enable_thinking),
+                "is_reasoning_model": bool(llm_is_reasoning_model),
                 "is_vision_model": bool(llm_is_vision),
             },
         }
@@ -465,35 +527,15 @@ def _chat_stream_ui(
     history: list[dict[str, str]],
     session_id: str,
 ) -> Generator[list[dict[str, str]], None, None]:
-    """Yield chat history in Gradio 6 messages format: [{\"role\": \"user\"|\"assistant\", \"content\": \"...\"}].
-
-    优化点：
-    - 普通助手回复保持一个连续气泡，逐 token 更新。
-    - 工具 / RAG 等结构化信息不再打印详细输入输出，只显示一个包含工具名的状态气泡，
-      例如“Calling tool `terminal_tool` ··”，减少单条消息的复杂度和体积。
-    """
+    """Yield chat history in Gradio 6 messages format with beautified tool display."""
 
     def _is_tool_like_chunk(text: str) -> bool:
+        """Check if chunk is tool/RAG related (now using CSS classes)"""
         t = (text or "").lstrip()
         return (
-            t.startswith("<span style='color:#36c'>[tool]")
-            or t.startswith("<span style='color:#36c'>[done]")
-            or t.startswith("<span style='color:#888'>[RAG]")
+            t.startswith("<div class='tool-card'>") or
+            t.startswith("<div class='error-box'>")
         )
-
-    def _strip_tags(text: str) -> str:
-        return re.sub(r"<[^>]+>", "", text or "").strip()
-
-    def _parse_tool_name(text: str) -> str:
-        """从工具相关的 HTML 片段里提取工具名。"""
-        clean = _strip_tags(text)
-        for prefix in ("[tool]", "[done]"):
-            if clean.startswith(prefix):
-                rest = clean[len(prefix) :].strip()
-                return (rest.split(":", 1)[0] or "tool").strip()
-        if clean.startswith("[RAG]"):
-            return "retrieval"
-        return "tool"
 
     if not message.strip():
         yield history
@@ -505,25 +547,39 @@ def _chat_stream_ui(
 
     try:
         c = _client_or_raise()
-        payload = {"session_id": session_id or "default", "message": message, "enable_thinking": False}
+        payload = {"session_id": session_id or "default", "message": message, "is_reasoning_model": False}
         for _role, chunk in c.chat_stream(payload):
-            # 完全隐藏工具 / RAG 相关的系统输出，只展示模型最终自然语言回复
+            # Tool/RAG/Error chunks: add as separate assistant messages
             if _is_tool_like_chunk(chunk):
-                continue
-
-            # 普通 model 输出：累积到当前 assistant 气泡
-            current_assistant += chunk
-            if current_assistant_index is None:
-                display_history.append({"role": "assistant", "content": current_assistant})
-                current_assistant_index = len(display_history) - 1
+                # 如果已有未完成的普通回复，先完成它
+                if current_assistant:
+                    if current_assistant_index is None:
+                        display_history.append({"role": "assistant", "content": current_assistant})
+                        current_assistant_index = len(display_history) - 1
+                    else:
+                        display_history[current_assistant_index]["content"] = current_assistant
+                    current_assistant = ""
+                    current_assistant_index = None
+                
+                # 添加美化的工具卡片作为独立消息
+                display_history.append({"role": "assistant", "content": chunk})
+                yield display_history
             else:
-                display_history[current_assistant_index] = {
-                    "role": "assistant",
-                    "content": current_assistant,
-                }
-            yield display_history
+                # 普通文本回复：累积显示
+                current_assistant += chunk
+                if current_assistant_index is None:
+                    display_history.append({"role": "assistant", "content": current_assistant})
+                    current_assistant_index = len(display_history) - 1
+                else:
+                    display_history[current_assistant_index]["content"] = current_assistant
+                yield display_history
     except Exception as e:
-        display_history.append({"role": "assistant", "content": f"❌ **Error:** {e}"})
+        # 美化错误提示
+        error_html = f"<div class='error-box'>❌ **Error during chat:** {str(e)}</div>"
+        if current_assistant_index is not None:
+            display_history[current_assistant_index]["content"] = error_html
+        else:
+            display_history.append({"role": "assistant", "content": error_html})
         yield display_history
 
 
@@ -592,7 +648,116 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
     global _client
     _client = GatewayClient(base_url=gateway_url)
 
-    with gr.Blocks(title="microclaw") as demo:
+    # 自定义 CSS 样式，美化工具信息展示
+    custom_css = """
+    .gradio-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .chat-container {
+        max-height: 70vh;
+    }
+    .session-sidebar {
+        min-width: 220px;
+    }
+    .chat-main {
+        min-width: 0;
+    }
+    .bottom-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-start;
+    }
+    .bottom-actions > button {
+        flex: 0 0 auto;
+    }
+    .clean-note {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    /* 工具卡片样式 */
+    .tool-card {
+        margin: 8px 0;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background-color: #f9fafb;
+        font-size: 0.95em;
+    }
+    .tool-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .tool-icon {
+        font-size: 1.1em;
+    }
+    .tool-name {
+        font-weight: 600;
+        flex: 1;
+    }
+    .tool-status {
+        font-size: 0.85em;
+        color: #6b7280;
+    }
+    .tool-content {
+        padding-left: 4px;
+    }
+    .tool-label {
+        font-size: 0.85em;
+        color: #4b5563;
+        margin-bottom: 4px;
+        font-weight: 500;
+    }
+    .tool-pre {
+        background-color: #f3f4f6;
+        padding: 8px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        overflow-x: auto;
+        max-height: 200px;
+        white-space: pre-wrap;
+    }
+    /* 不同类型工具卡片的配色 */
+    .tool-executing {
+        border-left: 4px solid #3b82f6;
+    }
+    .tool-success {
+        border-left: 4px solid #10b981;
+    }
+    .tool-rag {
+        border-left: 4px solid #8b5cf6;
+    }
+    /* RAG 内容样式 */
+    .rag-content {
+        padding-left: 8px;
+    }
+    .rag-item {
+        margin: 4px 0;
+        padding-left: 4px;
+        border-left: 2px solid #ddd;
+    }
+    /* 思考过程文本样式 */
+    .reasoning-text {
+        color: #6b7280;
+        font-style: italic;
+    }
+    /* 错误提示框样式 */
+    .error-box {
+        margin: 8px 0;
+        padding: 12px;
+        border-radius: 8px;
+        background-color: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+    }
+    """
+
+    with gr.Blocks(title="microclaw", css=custom_css) as demo:
         gr.Markdown("# microclaw · Gateway GUI")
 
         with gr.Tabs():
@@ -672,6 +837,10 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
             # ---- Config ----
             with gr.TabItem("⚙️ Config"):
                 config_status = gr.Markdown("_Click Load to fetch config._")
+                gr.Markdown(
+                    "**Important:** This project only supports **OpenAI-compatible** providers. "
+                    "Keep `llm.format` and `embeddings.format` as `\"openai\"`."
+                )
                 with gr.Row():
                     config_load_btn = gr.Button("Load config")
                     config_save_btn = gr.Button("Save config", variant="primary")
@@ -690,7 +859,7 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                     cfg_llm_api_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
                     with gr.Row():
                         cfg_llm_temp = gr.Number(label="Temperature", value=0.1, minimum=0, maximum=2, step=0.1)
-                        cfg_llm_thinking = gr.Checkbox(label="Enable thinking", value=False)
+                        cfg_llm_thinking = gr.Checkbox(label="Reasoning model", value=False)
                         cfg_llm_vision = gr.Checkbox(label="Vision model", value=False)
 
                 with gr.Accordion("Embeddings", open=True):
@@ -908,33 +1077,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         share=args.share,
         inbrowser=True,
         theme=gr.themes.Soft(),
-        css="""
-        .gradio-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .chat-container {
-            max-height: 70vh;
-        }
-        .session-sidebar {
-            min-width: 220px;
-        }
-        .chat-main {
-            min-width: 0;
-        }
-        .bottom-actions {
-            display: flex;
-            gap: 0.75rem;
-            justify-content: flex-start;
-        }
-        .bottom-actions > button {
-            flex: 0 0 auto;
-        }
-        .clean-note {
-            font-size: 0.85rem;
-            color: #666;
-        }
-        """,
     )
     return 0
 

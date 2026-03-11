@@ -1,4 +1,5 @@
 from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from deepagents import create_deep_agent
 
@@ -11,12 +12,55 @@ from mcps import get_mcp_tools
 from config import get_llm_config, get_base_dir, get_rag_mode
 from config import get_deepagent
 
-from .model import ChatOpenAIWithReasoning
+from .model import (
+    DeepSeekChatModel, 
+    DeepSeekReasoningModel, 
+    DoubaoChatModel, 
+    DoubaoReasoningModel
+)
 from .session_manager import session_manager
 from .prompt_builder import build_system_prompt
 from .memory_indexer import get_memory_indexer
-
 import asyncio
+
+
+def get_model(model_name: str) -> ChatOpenAI:
+
+    if model_name == "deepseek-chat":
+        llm_info = (get_llm_config().get("info") or {})
+        return DeepSeekChatModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url", "https://api.deepseek.com"),
+            temperature=llm_info.get("temperature"),
+        )
+
+    elif model_name == "deepseek-reasoner":
+        llm_info = (get_llm_config().get("info") or {})
+        return DeepSeekReasoningModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url", "https://api.deepseek.com"),
+            temperature=llm_info.get("temperature"),
+        )
+
+    elif model_name == "doubao-seed-2-0-pro-260215":
+        llm_info = (get_llm_config().get("info") or {})
+        return DoubaoReasoningModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url", "https://ark.cn-beijing.volces.com/api/v3"),
+            temperature=llm_info.get("temperature"),
+        )
+
+    elif model_name == "doubao-seed-2-0-pro-260215":
+        llm_info = (get_llm_config().get("info") or {})
+        return DoubaoChatModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url", "https://ark.cn-beijing.volces.com/api/v3"),
+            temperature=llm_info.get("temperature"),
+        )
 
 
 class AgentManager:
@@ -28,17 +72,11 @@ class AgentManager:
     def initialize(self, base_dir: Path) -> None:
         """Initialize model and tools, called once at startup"""
         llm_info = get_llm_config().get("info") or {}
-        self._enable_thinking = llm_info.get("enable_thinking")
+        self._is_reasoning_model = llm_info.get("is_reasoning_model")
         self._base_dir = base_dir
-        # mcp_tools = get_mcp_tools() # TODO
+        self._model_name = llm_info.get("model")
         self._tools = get_all_tools(base_dir) # TODO if len(mcp_tools) == 0 else mcp_tools + get_all_tools(base_dir)
-        self._model = ChatOpenAIWithReasoning(
-            model=llm_info.get("model"),
-            base_url=llm_info.get("base_url"),
-            api_key=llm_info.get("api_key"),
-            temperature=llm_info.get("temperature"),
-            extra_body = {"enable_thinking": self._enable_thinking} 
-        )
+        self._model = get_model(self._model_name)
         session_manager.initialize(base_dir)
         # print(f"Agent initialized by using model: {llm_info.get('model')}, loaded tools number: {len(self._tools)}")
 
@@ -95,6 +133,8 @@ Summary:"""
         )
         # print(f"Agent类型: {type(agent)}")
         return agent 
+
+
     def _build_messages(
         self, user_message: str, 
         image_url: Optional[str], 

@@ -44,7 +44,14 @@ pip install -r requirements.txt
 
 ### 3. 填写配置文件
 
-将 `example` 文件夹下的 `config.json` 文件放在项目根目录下, 填写相应信息。(注意AI网关统一用openai格式调用, 包括embedding模型, chat模型等。 )
+将 `example` 文件夹下的 `config.json` 文件放在项目根目录下, 填写相应信息。
+
+**重要（硬性要求）**：本项目的 Chat / Embeddings 提供方都必须提供 **OpenAI-compatible** 接口，因此配置里必须使用：
+
+- `llm.format = "openai"`
+- `embeddings.format = "openai"`
+
+如果 `format` 不是 `"openai"`，将无法正常调用模型（网关会按 OpenAI Chat Completions / Embeddings 规范组装请求）。
 
 ### 4. 启动（推荐：microclaw 一键启动）
 

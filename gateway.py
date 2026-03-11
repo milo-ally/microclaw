@@ -60,7 +60,7 @@ class ConfigPatch(BaseModel):
 class ChatStreamRequest(BaseModel):
     session_id: str = Field(default="default", min_length=1, max_length=64)
     message: str = Field(min_length=1)
-    enable_thinking: bool = False
+    is_reasoning_model: bool = False
     image_url: Optional[str] = None
 
 
@@ -136,6 +136,13 @@ def update_config(patch: ConfigPatch) -> dict[str, Any]:
     current = load_config()
     updates = patch.model_dump(exclude_unset=True)
     merged = {**current, **updates}
+    
+    # This project only supports OpenAI-compatible providers.
+    # Force llm/embeddings format to "openai" even if a client sends something else.
+    for k in ("llm", "embeddings"):
+        block = merged.get(k)
+        if isinstance(block, dict):
+            block["format"] = "openai"
 
     # If base_dir is being set and target doesn't exist, init workspace from agent template
     if "base_dir" in updates and updates.get("base_dir"):
