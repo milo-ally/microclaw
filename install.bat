@@ -44,6 +44,24 @@ if errorlevel 1 (
 
 echo.
 echo Installation completed successfully!
-echo To activate the virtual environment, run: %VENV_NAME%\Scripts\activate.bat
-echo After activation, start the program with: microclaw onboard
-pause
+echo.
+echo Starting microclaw GUI on port 8000...
+echo ============================================
+echo.
+
+echo Tip: For CLI mode, you can run: microclaw onboard
+echo.
+
+REM 启动 microclaw GUI
+microclaw gui --port 8000
+
+if errorlevel 1 (
+    echo.
+    echo Error: Failed to start microclaw GUI!
+    echo Please check if the installation was successful.
+    echo.
+    echo To activate the virtual environment, run: %VENV_NAME%\Scripts\activate.bat
+    echo After activation, start the program with: microclaw onboard
+    pause
+    exit /b 1
+)

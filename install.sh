@@ -29,5 +29,15 @@ pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 echo ""
 echo "Installation completed successfully!"
-echo "To activate the virtual environment, run: source $VENV_NAME/bin/activate"
-echo "After activation, start the program with: microclaw onboard"
+echo ""
+echo "Starting microclaw GUI on port 8000..."
+echo "============================================"
+echo ""
+
+# 启动 microclaw GUI
+if ! microclaw gui --port 8000; then
+    echo ""
+    echo "Error: Failed to start microclaw GUI!"
+    echo "Please check if the installation was successful."
+    exit 1
+fi
