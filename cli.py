@@ -248,6 +248,17 @@ def _onboard_config() -> None:
     config_mod = _load_config_module()
     cfg = config_mod.load_config()
 
+    def _prompt(text: str, default: str | None = None) -> str:
+        """
+        Prompt user with an optional default value.
+        If the user presses enter with no input, the default is returned.
+        """
+        label = text
+        if default:
+            label += f" [default {default}]"
+        val = input(f"{label}: ").strip()
+        return val or (default or "")
+
     def _prompt_required(text: str, hint: str | None = None) -> str:
         """
         Prompt user for a non-empty value with an optional hint (example only).
