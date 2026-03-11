@@ -1,4 +1,11 @@
 # Microclaw
+## 极速开始
+windows: 双击install.bat (确保已经正确配置python基础环境, 确保python命令, pip命令可用。)
+Linux: 
+```bash
+chmod +x install.sh
+bash install.sh
+```
 
 ## 快速开始 
 需要的python版本: python>=3.12.3
