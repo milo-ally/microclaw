@@ -18,6 +18,11 @@ def get_all_tools(base_dir: str | Path | None = None) -> list[BaseTool]:
     from .ask_user_question_tool import create_ask_user_question_tool
     from .sql_tools import create_sql_tools
     from .tavily_search_tool import create_tavily_search_tool
+    from .rm_tool import create_rm_tool
+    from .sed_all_tool import create_sed_all_tool
+    from .sed_first_tool import create_sed_first_tool
+    from .write_tool import create_write_tool
+    from .grep_tool import create_grep_tool
     
     tools.extend([
         tool for tool in [
@@ -26,7 +31,12 @@ def get_all_tools(base_dir: str | Path | None = None) -> list[BaseTool]:
             create_terminal_tool(root_dir=root),
             create_python_repl_tool(root_dir=root),
             create_ask_user_question_tool(), 
-            create_tavily_search_tool()
+            create_tavily_search_tool(), 
+            create_rm_tool(),
+            create_sed_all_tool(),
+            create_sed_first_tool(),
+            create_write_tool(),
+            create_grep_tool(),
         ] if tool is not None
     ])
 

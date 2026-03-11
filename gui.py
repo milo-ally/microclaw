@@ -285,6 +285,11 @@ _COMMON_TOOLS = [
     "read_file_tool",
     "tavily_search_tool",
     "terminal_tool",
+    "rm_tool",
+    "sed_all_tool",
+    "sed_first_tool",
+    "write_tool",
+    "grep_tool",
 ]
 
 
@@ -296,27 +301,27 @@ def _config_load_to_form() -> tuple:
     except Exception as e:
         raise RuntimeError(f"Failed to load config: {e}") from e
 
-    platform = str(cfg.get("platform", ""))
-    base_dir = str(cfg.get("base_dir", ""))
+    platform = str(cfg.get("platform", "") or "")
+    base_dir = str(cfg.get("base_dir", "") or "")
     rag_mode = bool(cfg.get("rag_mode", False))
     deepagent = bool(cfg.get("deepagent", False))
 
     llm = cfg.get("llm") or {}
-    llm_provider = str(llm.get("provider", "openai"))
+    llm_provider = str(llm.get("provider") or "")
     llm_info = llm.get("info") or {}
-    llm_model = str(llm_info.get("model", ""))
-    llm_base_url = str(llm_info.get("base_url", ""))
-    llm_api_key = str(llm_info.get("api_key", ""))
+    llm_model = str(llm_info.get("model") or "")
+    llm_base_url = str(llm_info.get("base_url") or "")
+    llm_api_key = str(llm_info.get("api_key") or "")
     llm_temperature = float(llm_info.get("temperature", 0.1))
     llm_is_reasoning_model = bool(llm_info.get("is_reasoning_model", False))
     llm_is_vision = bool(llm_info.get("is_vision_model", False))
 
     emb = cfg.get("embeddings") or {}
-    emb_provider = str(emb.get("provider", "openai"))
+    emb_provider = str(emb.get("provider") or "")
     emb_info = emb.get("info") or {}
-    emb_model = str(emb_info.get("model", ""))
-    emb_base_url = str(emb_info.get("base_url", ""))
-    emb_api_key = str(emb_info.get("api_key", ""))
+    emb_model = str(emb_info.get("model") or "")
+    emb_base_url = str(emb_info.get("base_url") or "")
+    emb_api_key = str(emb_info.get("api_key") or "")
 
     tools = cfg.get("tools") or {}
     tool_checks = []
@@ -375,6 +380,11 @@ def _config_save_from_form(
     tool_read: bool,
     tool_tavily: bool,
     tool_terminal: bool,
+    tool_rm: bool,
+    tool_sed_all: bool,
+    tool_sed_first: bool,
+    tool_write: bool,
+    tool_grep: bool,
     sql_db_uri: str,
     tavily_api_key: str,
     mcps_json: str,
@@ -389,13 +399,21 @@ def _config_save_from_form(
             "ask_user_question_tool": {"status": "on" if tool_ask else "off"},
             "fetch_url_tool": {"status": "on" if tool_fetch else "off"},
             "python_repl_tool": {"status": "on" if tool_python else "off"},
-            "sql_tools": {"status": "on" if tool_sql else "off", "db_uri": _s(sql_db_uri) or ""},
+            "sql_tools": {"status": "on" if tool_sql else "off", "db_uri": _s(sql_db_uri)},
             "read_file_tool": {"status": "on" if tool_read else "off"},
-            "tavily_search_tool": {"status": "on" if tool_tavily else "off", "tavily_api_key": _s(tavily_api_key) or ""},
+            "tavily_search_tool": {
+                "status": "on" if tool_tavily else "off",
+                "tavily_api_key": _s(tavily_api_key),
+            },
             "terminal_tool": {"status": "on" if tool_terminal else "off"},
+            "rm_tool": {"status": "on" if tool_rm else "off"},
+            "sed_all_tool": {"status": "on" if tool_sed_all else "off"},
+            "sed_first_tool": {"status": "on" if tool_sed_first else "off"},
+            "write_tool": {"status": "on" if tool_write else "off"},
+            "grep_tool": {"status": "on" if tool_grep else "off"},
         }
         llm = {
-            "provider": _s(llm_provider) or "openai",
+            "provider": _s(llm_provider),
             "format": "openai",
             "info": {
                 "model": _s(llm_model),
@@ -407,7 +425,7 @@ def _config_save_from_form(
             },
         }
         embeddings = {
-            "provider": _s(emb_provider) or "openai",
+            "provider": _s(emb_provider),
             "format": "openai",
             "info": {
                 "model": _s(emb_model),
@@ -820,7 +838,18 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         return gr.update(choices=choices, value=sid)
                     return gr.update(choices=choices)
 
+                # Send by clicking button
                 submit_btn.click(
+                    _chat_stream_ui,
+                    inputs=[msg, chatbot, session_id_state],
+                    outputs=[chatbot],
+                ).then(lambda: "", outputs=[msg]).then(
+                    _refresh_choices_after_send,
+                    inputs=[session_id_state],
+                    outputs=[sessions_dd],
+                )
+                # Send by pressing Enter in the textbox
+                msg.submit(
                     _chat_stream_ui,
                     inputs=[msg, chatbot, session_id_state],
                     outputs=[chatbot],
@@ -879,6 +908,12 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_tavily = gr.Checkbox(label="tavily_search", value=False)
                         cfg_tool_terminal = gr.Checkbox(label="terminal", value=True)
                     with gr.Row():
+                        cfg_tool_rm = gr.Checkbox(label="rm_tool", value=True)
+                        cfg_tool_sed_all = gr.Checkbox(label="sed_all_tool", value=True)
+                        cfg_tool_sed_first = gr.Checkbox(label="sed_first_tool", value=True)
+                        cfg_tool_write = gr.Checkbox(label="write_tool", value=True)
+                        cfg_tool_grep = gr.Checkbox(label="grep_tool", value=True)
+                    with gr.Row():
                         cfg_sql_db_uri = gr.Textbox(
                             label="SQL: DB URI (when sql_tools enabled)",
                             placeholder="postgresql+psycopg2://user:pass@host:5432/db",
@@ -922,6 +957,11 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_read,
                         cfg_tool_tavily,
                         cfg_tool_terminal,
+                        cfg_tool_rm,
+                        cfg_tool_sed_all,
+                        cfg_tool_sed_first,
+                        cfg_tool_write,
+                        cfg_tool_grep,
                         cfg_sql_db_uri,
                         cfg_tavily_key,
                         cfg_mcps_json,
@@ -952,6 +992,11 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_read,
                         cfg_tool_tavily,
                         cfg_tool_terminal,
+                        cfg_tool_rm,
+                        cfg_tool_sed_all,
+                        cfg_tool_sed_first,
+                        cfg_tool_write,
+                        cfg_tool_grep,
                         cfg_sql_db_uri,
                         cfg_tavily_key,
                         cfg_mcps_json,

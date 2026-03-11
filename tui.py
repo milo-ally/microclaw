@@ -379,7 +379,9 @@ def _edit_provider_block(kind: str, block: dict[str, Any]) -> dict[str, Any]:
       {"provider": "...", "format":"openai", "info": {...}}
     """
     section(f"Edit {kind} provider")
-    provider = prompt(f"{kind}.provider", str(block.get("provider", "")))
+    current_provider = str(block.get("provider", "") or "")
+    # When provider is empty, do not show a default in the prompt; user must type explicitly.
+    provider = prompt(f"{kind}.provider", None if not current_provider else current_provider)
     fmt = prompt(f"{kind}.format (must be 'openai')", str(block.get("format", "openai") or "openai"))
     if fmt.strip().lower() != "openai":
         warn("This project expects OpenAI-compatible format. Setting format to 'openai'.")

@@ -62,6 +62,13 @@ def get_model(model_name: str) -> ChatOpenAI:
             temperature=llm_info.get("temperature"),
         )
 
+    raise RuntimeError(
+        f"Unsupported llm.info.model '{model_name}'. "
+        "Expected one of: 'deepseek-chat', 'deepseek-reasoner', "
+        "'doubao-seed-2-0-pro-260215' (chat/reasoning variants). "
+        "Please check config.llm.info.model."
+    )
+
 
 class AgentManager:
     def __init__(self) -> None: 
@@ -110,8 +117,17 @@ Summary:"""
 
     def _build_agent(self): 
         """Build agent with model and tools"""
-        assert self._model is not None 
-        assert self._base_dir is not None 
+        if self._model is None:
+            raise RuntimeError(
+                "Agent model is not initialized. "
+                "This usually means config.llm.info is missing required fields or "
+                "AgentManager.initialize() was not called."
+            )
+        if self._base_dir is None:
+            raise RuntimeError(
+                "Agent base_dir is not initialized. "
+                "Ensure config.base_dir is set and AgentManager.initialize() has been run."
+            )
 
         rag_mode = get_rag_mode()
         system_prompt = build_system_prompt(self._base_dir, rag_mode=rag_mode)

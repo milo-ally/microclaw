@@ -296,15 +296,25 @@ async def _sse_event_generator(req: ChatStreamRequest) -> AsyncGenerator[dict[st
         }
 
     except HTTPException as e:
+        # Make sure we never emit an empty error message – this is surfaced directly in TUI/GUI.
+        detail = e.detail
+        msg = ""
+        if isinstance(detail, str):
+            msg = detail.strip()
+        elif detail is not None:
+            msg = str(detail).strip()
+        if not msg:
+            msg = f"HTTPException {e.status_code or ''}".strip()
         yield {
-            "event": "error", 
-            "data": json.dumps({"type": "error", "content": e.detail}, ensure_ascii=False)
+            "event": "error",
+            "data": json.dumps({"type": "error", "content": msg}, ensure_ascii=False),
         }
-    
+
     except Exception as e:
+        msg = str(e).strip() or e.__class__.__name__
         yield {
-            "event": "error", 
-            "data": json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
+            "event": "error",
+            "data": json.dumps({"type": "error", "content": msg}, ensure_ascii=False),
         }
 
 
