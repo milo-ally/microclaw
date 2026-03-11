@@ -1,12 +1,12 @@
 @echo off
-:: 强制设置编码为UTF-8（兼容中文，避免乱码）
+:: Set codepage to support basic characters (avoid garbled code)
 chcp 65001 > nul 2>&1
 
-:: 定义虚拟环境名称（避免变量解析错误）
+:: Define virtual environment name (fixed variable syntax)
 set "VENV_NAME=.venv"
 
 echo Checking Python environment...
-:: 检查python是否可用，优先兼容python3命令
+:: Check Python availability (compatible with python/python3)
 python --version > nul 2>&1
 if errorlevel 1 (
     python3 --version > nul 2>&1
@@ -81,7 +81,7 @@ echo.
 echo Starting microclaw GUI on port 8000...
 echo.
 
-:: 启动 microclaw GUI
+:: Start microclaw GUI
 microclaw gui --port 8000
 
 if errorlevel 1 (
@@ -95,5 +95,4 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: 防止窗口闪退（可选）
 pause
