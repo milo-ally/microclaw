@@ -1,16 +1,18 @@
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type
+from __future__ import annotations
 
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
+from typing import Type
 
-TOOL_STATUS = get_tools_config()["sed_first_tool"]["status"]
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+
+from microclaw.config import get_tools_config
+
 
 class SedFirstInput(BaseModel):
-    filepath: str = Field(description="File to modify")
+    filepath: str = Field(
+        description="File to modify. Relative paths are resolved against the workspace base_dir."
+    )
     old_str: str = Field(description="String to replace")
     new_str: str = Field(description="Replacement string")
 
@@ -18,11 +20,19 @@ class SedFirstTool(BaseTool):
     name: str = "sed_first"
     description: str = "Replace the FIRST occurrence of a string in file."
     args_schema: Type[BaseModel] = SedFirstInput
+    root_dir: str | None = None
+
+    def _resolve_path(self, filepath: str) -> Path:
+        p = Path(filepath)
+        if p.is_absolute() or not self.root_dir:
+            return p
+        root = Path(self.root_dir).resolve()
+        return (root / filepath).expanduser().resolve()
 
     def _run(self, filepath: str, old_str: str, new_str: str) -> str:
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            target = self._resolve_path(filepath)
+            lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
             content = "".join(lines)
 
             if old_str not in content:
@@ -40,11 +50,10 @@ class SedFirstTool(BaseTool):
                 else:
                     new_lines.append(line)
 
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write("".join(new_lines))
+            target.write_text("".join(new_lines), encoding="utf-8")
 
             return (
-                f"Success: replaced in {filepath}\n"
+                f"Success: replaced in {target}\n"
                 f"Line approx: {replace_line}\n"
                 f"First occurrence replaced."
             )
@@ -55,9 +64,12 @@ class SedFirstTool(BaseTool):
     async def _arun(self, filepath: str, old_str: str, new_str: str) -> str:
         return self._run(filepath, old_str, new_str)
 
-def create_sed_first_tool():
-    if TOOL_STATUS == "on":
-        return SedFirstTool()
+
+def create_sed_first_tool(root_dir: str | None = None):
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("sed_first_tool") or {}).get("status", "off")).lower()
+    if status == "on":
+        return SedFirstTool(root_dir=root_dir)
     return None
 
 

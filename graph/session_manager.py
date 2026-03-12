@@ -1,8 +1,30 @@
-import json 
-import time 
-from pathlib import Path 
-from typing import Any, Optional 
+import json
+import os
+import tempfile
+import time
+from pathlib import Path
+from typing import Any, Optional
 
+
+
+def _atomic_write_text(path: Path, content: str, *, encoding: str = "utf-8") -> None:
+    """
+    Atomically write session files to reduce corruption on abrupt exits.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        except Exception:
+            pass
 
 
 class SessionManager: 
@@ -54,7 +76,7 @@ class SessionManager:
     def _write_file(self, session_id: str, data: dict[str, Any]) -> None:
         """Write session data to file"""
         path = self._session_path(session_id)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        _atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     def load_session(self, session_id: str) -> dict[str, Any]:
         """load session history messages from a session"""
@@ -85,6 +107,7 @@ class SessionManager:
         if tool_calls: 
             msg["tool_calls"] = tool_calls # adding tool calls to the message
         data["messages"].append(msg)
+        data["updated_at"] = time.time()
         self._write_file(session_id, data)
 
     def rename_session(self, session_id: str, title: str) -> None:

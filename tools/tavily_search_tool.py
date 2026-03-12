@@ -1,21 +1,18 @@
-from pathlib import Path 
+from __future__ import annotations
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
-
-TOOL_CONFIG = get_tools_config() 
-TOOL_STATUS = TOOL_CONFIG["tavily_search_tool"]["status"]
-TAVILY_API_KEY = TOOL_CONFIG["tavily_search_tool"]["tavily_api_key"]
+from microclaw.config import get_tools_config
 
 from langchain_tavily.tavily_search import TavilySearch
 
 def create_tavily_search_tool() -> TavilySearch | None:
-    if not TAVILY_API_KEY or not TAVILY_API_KEY.startswith("tvly-"):
+    tool_cfg = (get_tools_config() or {}).get("tavily_search_tool") or {}
+    status = str(tool_cfg.get("status", "off")).lower()
+    api_key = str(tool_cfg.get("tavily_api_key", "") or "")
+    if not api_key or not api_key.startswith("tvly-"):
         return None
-    if TOOL_STATUS == "on":
+    if status == "on":
         tool = TavilySearch(
-            tavily_api_key=TAVILY_API_KEY
+            tavily_api_key=api_key
         )
         return tool
     return None

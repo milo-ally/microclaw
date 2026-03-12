@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -9,8 +11,8 @@ from pathlib import Path
 from tools import get_all_tools
 
 
-from config import get_llm_config, get_base_dir, get_rag_mode
-from config import get_deepagent
+from microclaw.config import get_llm_config, get_base_dir, get_rag_mode
+from microclaw.config import get_deepagent
 
 from .model import (
     DeepSeekChatModel, 
@@ -24,7 +26,7 @@ from .memory_indexer import get_memory_indexer
 import asyncio
 
 
-def get_model(model_name: str) -> ChatOpenAI:
+def get_model(*, model_name: str, is_reasoning_model: bool) -> ChatOpenAI:
 
     if model_name == "deepseek-chat":
         llm_info = (get_llm_config().get("info") or {})
@@ -46,15 +48,16 @@ def get_model(model_name: str) -> ChatOpenAI:
 
     elif model_name == "doubao-seed-2-0-pro-260215":
         llm_info = (get_llm_config().get("info") or {})
-        return DoubaoReasoningModel(
-            model=model_name,
-            api_key=llm_info.get("api_key"),
-            base_url=llm_info.get("base_url", "https://ark.cn-beijing.volces.com/api/v3"),
-            temperature=llm_info.get("temperature"),
-        )
+        # Keep config surface stable: same model string, choose class by is_reasoning_model flag.
+        if is_reasoning_model:
+            
+            return DoubaoReasoningModel(
+                model=model_name,
+                api_key=llm_info.get("api_key"),
+                base_url=llm_info.get("base_url", "https://ark.cn-beijing.volces.com/api/v3"),
+                temperature=llm_info.get("temperature"),
+            )
 
-    elif model_name == "doubao-seed-2-0-pro-260215":
-        llm_info = (get_llm_config().get("info") or {})
         return DoubaoChatModel(
             model=model_name,
             api_key=llm_info.get("api_key"),
@@ -79,11 +82,11 @@ class AgentManager:
     def initialize(self, base_dir: Path) -> None:
         """Initialize model and tools, called once at startup"""
         llm_info = get_llm_config().get("info") or {}
-        self._is_reasoning_model = llm_info.get("is_reasoning_model")
+        self._is_reasoning_model = bool(llm_info.get("is_reasoning_model"))
         self._base_dir = base_dir
         self._model_name = llm_info.get("model")
         self._tools = get_all_tools(base_dir) # TODO if len(mcp_tools) == 0 else mcp_tools + get_all_tools(base_dir)
-        self._model = get_model(self._model_name)
+        self._model = get_model(model_name=self._model_name, is_reasoning_model=self._is_reasoning_model)
         session_manager.initialize(base_dir)
         # print(f"Agent initialized by using model: {llm_info.get('model')}, loaded tools number: {len(self._tools)}")
 

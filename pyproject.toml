@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 [project.scripts]
-microclaw = "cli:main"
+microclaw = "microclaw.cli:main"
 
 [tool.setuptools]
-py-modules = ["cli"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["microclaw*", "tools*", "graph*"]

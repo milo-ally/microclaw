@@ -1,10 +1,6 @@
-from pathlib import Path 
+from __future__ import annotations
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
-
-TOOL_STATUS = get_tools_config()["fetch_url_tool"]["status"]
+from microclaw.config import get_tools_config
 
 import html2text
 from typing import Type 
@@ -61,7 +57,9 @@ class FetchURLTool(BaseTool):
         return self._run(url)
 
 def create_fetch_url_tool() -> FetchURLTool | None:
-    if TOOL_STATUS == "on":
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("fetch_url_tool") or {}).get("status", "off")).lower()
+    if status == "on":
         return FetchURLTool()
     return None
 

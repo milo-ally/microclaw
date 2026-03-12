@@ -2,9 +2,7 @@ from pathlib import Path
 
 import yaml
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_base_dir
+from microclaw.config import get_base_dir
 
 
 def scan_skills(base_dir: Path | str | None = None) -> str: 

@@ -1,10 +1,6 @@
-from pathlib import Path 
+from __future__ import annotations
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
-
-TOOL_STATUS = get_tools_config()["python_repl_tool"]["status"]
+from microclaw.config import get_tools_config
 
 from typing import Optional
 
@@ -29,7 +25,9 @@ class PythonREPLWithRootTool(PythonREPLTool):
 
 def create_python_repl_tool(root_dir: str | None = None) -> PythonREPLTool | None:
     """Create Python REPL tool. root_dir sets the working directory for file operations."""
-    if TOOL_STATUS == "on":
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("python_repl_tool") or {}).get("status", "off")).lower()
+    if status == "on":
         if root_dir:
             tool = PythonREPLWithRootTool(root_dir=root_dir)
         else:

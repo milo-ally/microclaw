@@ -1,11 +1,9 @@
-from pathlib import Path 
-from typing import Type 
+from __future__ import annotations
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
+from pathlib import Path
+from typing import Type
 
-TOOL_STATUS = get_tools_config()["read_file_tool"]["status"]
+from microclaw.config import get_tools_config
 
 from langchain_core.tools import BaseTool 
 from pydantic import BaseModel, Field 
@@ -49,7 +47,9 @@ class SandBoxedReadFileTool(BaseTool):
             return f"Error reading file: {str(e)}" 
         
 def create_sandboxed_read_file_tool(root_dir: str) -> SandBoxedReadFileTool | None:
-    if TOOL_STATUS == "on":
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("read_file_tool") or {}).get("status", "off")).lower()
+    if status == "on":
         return SandBoxedReadFileTool(root_dir=root_dir)
     return None
 

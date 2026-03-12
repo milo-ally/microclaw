@@ -1,9 +1,8 @@
 """Build system prompt for agent."""
 
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_platform
+
+from microclaw.config import get_platform
 
 MAX_COMPONENT_LENGTH = 20000
 
@@ -20,7 +19,6 @@ RAG_GUIDANCE = """注意: 长期记忆(MEMORY.md)已切换为RAG检索模式。
 系统会根据用户的问题自动检索相关记忆片段并注入上下文。
 如果检索到了相关记忆, 它们会以 "[记忆检索结果]" 标记呈现在上下文中。
 """
-USER_PLATFORM = get_platform()
 
 
 
@@ -44,7 +42,8 @@ def build_system_prompt(base_dir: Path | str, rag_mode: bool = False) -> str:
             parts.append(f"<!-- {label} -->\n{content}")
     if rag_mode:
         parts.append(f"<!-- RAG MODE -->\n{RAG_GUIDANCE}")
-    parts.append(f"<!-- USER PLATFORM -->\n{USER_PLATFORM}")
+    # Read platform lazily so prompt builder does not depend on config being valid at import-time.
+    parts.append(f"<!-- USER PLATFORM -->\n{get_platform()}")
 
     return "\n\n".join(parts)
 

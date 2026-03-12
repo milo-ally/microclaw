@@ -1,16 +1,18 @@
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type
+from __future__ import annotations
 
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
+from typing import Type
 
-TOOL_STATUS = get_tools_config()["sed_all_tool"]["status"]
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+
+from microclaw.config import get_tools_config
+
 
 class SedAllInput(BaseModel):
-    filepath: str = Field(description="File to modify")
+    filepath: str = Field(
+        description="File to modify. Relative paths are resolved against the workspace base_dir."
+    )
     old_str: str = Field(description="String to replace globally")
     new_str: str = Field(description="Replacement string")
 
@@ -18,11 +20,19 @@ class SedAllTool(BaseTool):
     name: str = "sed_all"
     description: str = "Replace ALL occurrences of a string in file."
     args_schema: Type[BaseModel] = SedAllInput
+    root_dir: str | None = None
+
+    def _resolve_path(self, filepath: str) -> Path:
+        p = Path(filepath)
+        if p.is_absolute() or not self.root_dir:
+            return p
+        root = Path(self.root_dir).resolve()
+        return (root / filepath).expanduser().resolve()
 
     def _run(self, filepath: str, old_str: str, new_str: str) -> str:
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
+            target = self._resolve_path(filepath)
+            content = target.read_text(encoding="utf-8")
 
             if old_str not in content:
                 return "Error: old_str not found"
@@ -30,10 +40,9 @@ class SedAllTool(BaseTool):
             new_content = content.replace(old_str, new_str)
             count = content.count(old_str)
 
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(new_content)
+            target.write_text(new_content, encoding="utf-8")
 
-            return f"Success: replaced {count} occurrences in {filepath}"
+            return f"Success: replaced {count} occurrences in {target}"
 
         except Exception as e:
             return f"Error: {str(e)}"
@@ -41,9 +50,12 @@ class SedAllTool(BaseTool):
     async def _arun(self, filepath: str, old_str: str, new_str: str):
         return self._run(filepath, old_str, new_str)
 
-def create_sed_all_tool():
-    if TOOL_STATUS == "on":
-        return SedAllTool()
+
+def create_sed_all_tool(root_dir: str | None = None):
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("sed_all_tool") or {}).get("status", "off")).lower()
+    if status == "on":
+        return SedAllTool(root_dir=root_dir)
     return None
 
 

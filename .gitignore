@@ -2,13 +2,10 @@ __pycache__/
 *.pyc
 venv/
 .venv/
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
 .env
 config.json
+.microclaw/
 agent/sessions/*.json
 test.ipynb
-PRD.md
-TODOs.md
+*.egg-info/
+tutorial.ipynb

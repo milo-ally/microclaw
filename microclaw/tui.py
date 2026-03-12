@@ -1,38 +1,22 @@
 """
 microclaw - a friendly TUI for the FastAPI gateway.
-
-This TUI talks to the gateway layer in `gateway.py`:
-  - GET  /api/health
-  - GET  /api/config
-  - PUT  /api/config
-  - GET  /api/sessions
-  - GET  /api/sessions/{id}
-  - DELETE /api/sessions/{id}
-  - POST /api/chat/stream  (SSE)
-
-Important:
-  - Both **chat model** and **embedding model** access are expected to be
-    **OpenAI-compatible** ("format": "openai") with {model, base_url, api_key}.
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import os
 import sys
 import threading
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Iterator, Optional, Tuple, TypeVar
-import itertools
 
-
-# ---------- Small, dependency-free UI helpers ----------
+from microclaw.client import GatewayClient, parse_sse_events
 
 
 def _supports_color() -> bool:
@@ -111,15 +95,7 @@ def pause(msg: str = "Press Enter to continue") -> None:
     input(f"\n{msg}...")
 
 
-SLASH_HINT = "  /sessions | /clear | /session | /health | /config | /delete | /menu | /help"
-CMD_COLOR = "36"  # cyan for slash commands
-
-
 def _chat_input() -> str:
-    """
-    Chat input using standard input() - reliable, no raw mode.
-    The '/' and all typed text are always visible.
-    """
     return input(_c("\nYou > ", "36;1")).rstrip("\n")
 
 
@@ -128,10 +104,6 @@ T = TypeVar("T")
 
 @contextmanager
 def spinner(label: str, *, enabled: Optional[bool] = None, interval_s: float = 0.08):
-    """
-    Lightweight terminal spinner (no dependencies).
-    Falls back to a single-line message when not in a TTY.
-    """
     if enabled is None:
         enabled = sys.stdout.isatty()
     if not enabled:
@@ -150,7 +122,6 @@ def spinner(label: str, *, enabled: Optional[bool] = None, interval_s: float = 0
             sys.stdout.write("\r" + _c(frame, "36;1") + " " + label)
             sys.stdout.flush()
             time.sleep(interval_s)
-        # clear line
         sys.stdout.write("\r" + (" " * (len(label) + 4)) + "\r")
         sys.stdout.flush()
 
@@ -164,9 +135,6 @@ def spinner(label: str, *, enabled: Optional[bool] = None, interval_s: float = 0
 
 
 def splash() -> None:
-    """
-    Openclaw-like "feel": splash + onboarding note (microclaw branding).
-    """
     if not sys.stdout.isatty():
         return
     os.system("clear" if os.name != "nt" else "cls")
@@ -193,146 +161,6 @@ def splash() -> None:
             "90",
         )
     )
-
-
-# ---------- Gateway client ----------
-
-
-@dataclass(frozen=True)
-class GatewayClient:
-    base_url: str
-    timeout_s: float = 60.0
-
-    def _url(self, path: str) -> str:
-        return urllib.parse.urljoin(self.base_url.rstrip("/") + "/", path.lstrip("/"))
-
-    def _request_json(
-        self,
-        method: str,
-        path: str,
-        body: Optional[dict[str, Any]] = None,
-        headers: Optional[dict[str, str]] = None,
-    ) -> Any:
-        url = self._url(path)
-        data = None
-        req_headers = {"Accept": "application/json"}
-        if headers:
-            req_headers.update(headers)
-        if body is not None:
-            raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
-            data = raw
-            req_headers["Content-Type"] = "application/json; charset=utf-8"
-        req = urllib.request.Request(url, method=method.upper(), data=data, headers=req_headers)
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                charset = resp.headers.get_content_charset() or "utf-8"
-                text = resp.read().decode(charset, errors="replace")
-                if not text.strip():
-                    return None
-                return json.loads(text)
-        except urllib.error.HTTPError as e:
-            try:
-                detail = e.read().decode("utf-8", errors="replace")
-            except Exception:
-                detail = str(e)
-            raise RuntimeError(f"HTTP {e.code} {e.reason}: {detail}") from e
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"Network error: {e}") from e
-
-    def health(self) -> dict[str, Any]:
-        return self._request_json("GET", "/api/health")
-
-    def get_config(self) -> dict[str, Any]:
-        return self._request_json("GET", "/api/config")
-
-    def put_config(self, new_config: dict[str, Any]) -> dict[str, Any]:
-        # Gateway expects a patch; we send full top-level fields for safety.
-        patch: dict[str, Any] = {}
-        for k in ("platform", "base_dir", "rag_mode", "deepagent", "llm", "embeddings", "tools", "mcps"):
-            if k in new_config:
-                patch[k] = new_config[k]
-        return self._request_json("PUT", "/api/config", body=patch)
-
-    def list_sessions(self) -> list[dict[str, Any]]:
-        return self._request_json("GET", "/api/sessions")
-
-    def get_session(self, session_id: str) -> dict[str, Any]:
-        return self._request_json("GET", f"/api/sessions/{urllib.parse.quote(session_id)}")
-
-    def delete_session(self, session_id: str) -> dict[str, Any]:
-        return self._request_json("DELETE", f"/api/sessions/{urllib.parse.quote(session_id)}")
-
-    def clear_session(self, session_id: str) -> dict[str, Any]:
-        return self._request_json("POST", f"/api/sessions/{urllib.parse.quote(session_id)}/clear")
-
-    def cleanup_workspace(self) -> dict[str, Any]:
-        """Remove workspace files/dirs except memory, sessions, skills, storage, workplace."""
-        return self._request_json("POST", "/api/cleanup", body={})
-
-    def chat_stream_lines(self, payload: dict[str, Any]) -> Iterable[str]:
-        """
-        Connect to SSE endpoint and yield decoded lines.
-        """
-        url = self._url("/api/chat/stream")
-        raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            method="POST",
-            data=raw,
-            headers={
-                "Content-Type": "application/json; charset=utf-8",
-                "Accept": "text/event-stream",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            },
-        )
-        try:
-            resp = urllib.request.urlopen(req, timeout=self.timeout_s)  # noqa: S310 (user-supplied URL intended)
-        except urllib.error.HTTPError as e:
-            try:
-                detail = e.read().decode("utf-8", errors="replace")
-            except Exception:
-                detail = str(e)
-            raise RuntimeError(f"HTTP {e.code} {e.reason}: {detail}") from e
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"Network error: {e}") from e
-
-        # Read line-by-line; SSE uses \n\n as event boundary.
-        with resp:
-            for raw_line in resp:
-                try:
-                    line = raw_line.decode("utf-8", errors="replace")
-                except Exception:
-                    continue
-                yield line.rstrip("\r\n")
-
-
-def parse_sse_events(lines: Iterable[str]) -> Iterator[Tuple[str, str]]:
-    """
-    Minimal SSE parser.
-    Returns (event_name, data_text). `data_text` is concatenated by '\n' if multiple data lines.
-    """
-    event_name = "message"
-    data_lines: list[str] = []
-    for line in lines:
-        if not line:
-            if data_lines:
-                yield (event_name, "\n".join(data_lines))
-            event_name = "message"
-            data_lines = []
-            continue
-        if line.startswith(":"):
-            continue
-        if line.startswith("event:"):
-            event_name = line[len("event:") :].strip() or "message"
-        elif line.startswith("data:"):
-            data_lines.append(line[len("data:") :].lstrip())
-        # ignore id:, retry:
-    if data_lines:
-        yield (event_name, "\n".join(data_lines))
-
-
-# ---------- microclaw flows ----------
 
 
 def show_openai_compat_notice() -> None:
@@ -374,13 +202,8 @@ def flow_config_view(client: GatewayClient) -> None:
 
 
 def _edit_provider_block(kind: str, block: dict[str, Any]) -> dict[str, Any]:
-    """
-    Edit config like:
-      {"provider": "...", "format":"openai", "info": {...}}
-    """
     section(f"Edit {kind} provider")
     current_provider = str(block.get("provider", "") or "")
-    # When provider is empty, do not show a default in the prompt; user must type explicitly.
     provider = prompt(f"{kind}.provider", None if not current_provider else current_provider)
     fmt = prompt(f"{kind}.format (must be 'openai')", str(block.get("format", "openai") or "openai"))
     if fmt.strip().lower() != "openai":
@@ -391,7 +214,6 @@ def _edit_provider_block(kind: str, block: dict[str, Any]) -> dict[str, Any]:
     info_block["base_url"] = prompt(f"{kind}.info.base_url", str(info_block.get("base_url", "")))
     info_block["api_key"] = prompt(f"{kind}.info.api_key", str(info_block.get("api_key", "")))
     if kind == "llm":
-        # optional chat extras
         try:
             temp_default = info_block.get("temperature", 0.1)
             temp_str = prompt(f"{kind}.info.temperature", str(temp_default))
@@ -527,7 +349,6 @@ def flow_sessions(client: GatewayClient) -> None:
 
 
 def _new_session_id() -> str:
-    """Generate a unique session ID for new chat."""
     return f"session_{time.strftime('%Y%m%d_%H%M%S')}"
 
 
@@ -548,7 +369,6 @@ def flow_chat(client: GatewayClient) -> None:
         if not user_msg.strip():
             return
 
-        # Slash commands (local, not sent to agent)
         if user_msg.strip().startswith("/"):
             cmd = user_msg.strip().split()[0].lower() if user_msg.strip() else ""
             if cmd == "/sessions":
@@ -591,7 +411,7 @@ def flow_chat(client: GatewayClient) -> None:
                         msgs = raw.get("messages", [])
                         if msgs:
                             section("Recent context")
-                            for m in msgs[-6:]:  # last 6 messages
+                            for m in msgs[-6:]:
                                 role = m.get("role", "")
                                 content = (m.get("content", "") or "").strip()
                                 if len(content) > 200:
@@ -674,23 +494,13 @@ def flow_chat(client: GatewayClient) -> None:
             warn(f"Unknown slash command: {cmd}. Use /help for available commands.")
             continue
 
-        payload = {
-            "session_id": session_id,
-            "message": user_msg,
-            "is_reasoning_model": False,
-            "image_url": image_url,
-        }
-
-        assistant_buf: list[str] = []
-        reasoning_buf: list[str] = []
+        payload = {"session_id": session_id, "message": user_msg, "is_reasoning_model": False, "image_url": image_url}
 
         try:
-            # Connect and wait for the very first SSE line with a spinner.
             with spinner("Connecting SSE /api/chat/stream"):
                 it = iter(client.chat_stream_lines(payload))
-                first_line = next(it)  # blocks until connected / first data available
+                first_line = next(it)
 
-            # Now stream normally without spinner interfering output.
             lines = itertools.chain([first_line], it)
             for ev_name, data in parse_sse_events(lines):
                 if ev_name == "end":
@@ -702,7 +512,6 @@ def flow_chat(client: GatewayClient) -> None:
                     except Exception:
                         err(data)
                     break
-                # ev_name == "message"
                 try:
                     obj = json.loads(data)
                 except Exception:
@@ -711,12 +520,10 @@ def flow_chat(client: GatewayClient) -> None:
                 et = obj.get("type")
                 if et == "token":
                     chunk = obj.get("content") or ""
-                    assistant_buf.append(chunk)
                     print(chunk, end="", flush=True)
                 elif et == "reasoning_token":
                     if show_reasoning:
                         chunk = obj.get("content") or ""
-                        reasoning_buf.append(chunk)
                         print(_c(chunk, "90"), end="", flush=True)
                 elif et == "retrieval":
                     section("RAG retrieval")
@@ -733,31 +540,24 @@ def flow_chat(client: GatewayClient) -> None:
                     chunk = obj.get("content") or ""
                     print()
                     print(_c("[tool call]", "34;1") + " " + chunk, end="", flush=True)
-
                 elif et == "tool_calling":
                     chunk = obj.get("content") or ""
                     print(_c(chunk, "34"), end="", flush=True)
-                
                 elif et == "tool_execute":
                     tname = obj.get("tool") or ""
                     tin = obj.get("input") or ""
                     print()
                     print(_c("[tool execute]", "34;1") + f" {tname}: {tin}")
-                
                 elif et == "tool_response":
                     tname = obj.get("tool") or ""
                     tout = obj.get("output") or ""
                     print()
                     print(_c("[tool response]", "32;1") + f" {tname}: {tout}")
-                
                 elif et == "tool_execute_done":
                     print()
                     print(_c("--- tool block done, agent continuing ---", "90"))
-                
                 elif et == "all_done":
-                    # ensure newline after streaming
                     print()
-                # ignore other event types (e.g. ai_message, debug)
         except Exception as e:
             err(str(e))
 
@@ -783,7 +583,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not ok:
         print()
         print("Start the gateway first:")
-        print("  python run_gateway.py")
+        print("  python -m uvicorn microclaw.gateway:app --host 127.0.0.1 --port 8000")
         print()
         pause("Press Enter to open menu anyway")
 
@@ -793,14 +593,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         section("Menu")
         choice = prompt_choice(
             "Select",
-            [
-                "Health",
-                "Config (view)",
-                "Config (edit & save)",
-                "Sessions",
-                "Chat (SSE streaming)",
-                "Exit",
-            ],
+            ["Health", "Config (view)", "Config (edit & save)", "Sessions", "Chat (SSE streaming)", "Exit"],
         )
         if choice == "Health":
             flow_health(client)
@@ -818,3 +611,4 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

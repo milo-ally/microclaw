@@ -2,33 +2,32 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
 from langchain_openai import ChatOpenAI
 
-from pathlib import Path 
+from __future__ import annotations
 
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config, get_llm_config
-
-MODEL = get_llm_config()["info"]["model"]
-API_KEY = get_llm_config()["info"]["api_key"]
-BASE_URL = get_llm_config()["info"]["base_url"]
-
-TOOL_STATUS = get_tools_config()["sql_tools"]["status"]
-DB_URI = get_tools_config()["sql_tools"]["db_uri"]
-
-
-model = ChatOpenAI(
-    model=MODEL, 
-    api_key=API_KEY, 
-    base_url=BASE_URL
-)
+from microclaw.config import get_llm_config, get_tools_config
 
 
 def create_sql_tools() -> list | None:
-    if TOOL_STATUS == "on":
-        db = SQLDatabase.from_uri(DB_URI)
-        toolkit = SQLDatabaseToolkit(db=db, llm=model)
-        tools = toolkit.get_tools()
-        return tools
+    tools_cfg = get_tools_config() or {}
+    sql_cfg = tools_cfg.get("sql_tools") or {}
+    status = str(sql_cfg.get("status", "off")).lower()
+    db_uri = str(sql_cfg.get("db_uri", "") or "").strip()
+    if status != "on":
+        return None
+    if not db_uri:
+        return None
+
+    llm_info = (get_llm_config().get("info") or {})
+    model_name = str(llm_info.get("model", "") or "").strip()
+    api_key = str(llm_info.get("api_key", "") or "").strip()
+    base_url = str(llm_info.get("base_url", "") or "").strip()
+    if not model_name or not api_key or not base_url:
+        return None
+
+    model = ChatOpenAI(model=model_name, api_key=api_key, base_url=base_url)
+    db = SQLDatabase.from_uri(db_uri)
+    toolkit = SQLDatabaseToolkit(db=db, llm=model)
+    return toolkit.get_tools()
     return None
 
 if __name__ == "__main__": 

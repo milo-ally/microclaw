@@ -14,7 +14,7 @@ from llama_index.core import (
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.openai import OpenAIEmbedding
 
-from config import get_embeddings_config
+from microclaw.config import get_embeddings_config
 
 
 def _get_embed_model() -> OpenAIEmbedding:

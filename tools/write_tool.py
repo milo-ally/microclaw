@@ -1,38 +1,57 @@
-import os
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type
+from __future__ import annotations
 
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
+from typing import Type
 
-TOOL_STATUS = get_tools_config()["write_tool"]["status"]
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+
+from microclaw.config import get_tools_config
+
 
 class WriteInput(BaseModel):
-    filename: str = Field(description="Target file path")
+    filename: str = Field(description="Target file path (relative to workspace root if not absolute)")
     content: str = Field(description="Content to write")
+
 
 class WriteTool(BaseTool):
     name: str = "write"
-    description: str = "Write or overwrite a file. Like: echo content > file"
+    description: str = (
+        "Write or overwrite a file. Like: echo content > file. "
+        "Relative paths are resolved against the workspace base_dir."
+    )
     args_schema: Type[BaseModel] = WriteInput
+    root_dir: str | None = None
+
+    def _resolve_path(self, filename: str) -> Path:
+        # Absolute path: respect as-is (still bounded by OS permissions)
+        p = Path(filename)
+        if p.is_absolute() or not self.root_dir:
+            return p
+        root = Path(self.root_dir).resolve()
+        # Normalize potential "../" etc. relative segments
+        full = (root / filename).expanduser().resolve()
+        return full
 
     def _run(self, filename: str, content: str) -> str:
         try:
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(content)
-            return f"Success: written to {filename}"
+            target = self._resolve_path(filename)
+            # Ensure parent directory exists
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+            return f"Success: written to {target}"
         except Exception as e:
             return f"Error: {str(e)}"
 
     async def _arun(self, filename: str, content: str) -> str:
         return self._run(filename, content)
 
-def create_write_tool() -> WriteTool | None:
-    if TOOL_STATUS == "on":
-        return WriteTool()
+
+def create_write_tool(root_dir: str | None = None) -> WriteTool | None:
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("write_tool") or {}).get("status", "off")).lower()
+    if status == "on":
+        return WriteTool(root_dir=root_dir)
     return None
 
 

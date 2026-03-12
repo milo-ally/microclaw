@@ -1,9 +1,6 @@
-import sys
-from pathlib import Path 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
+from __future__ import annotations
 
-TOOL_STATUS = get_tools_config()["ask_user_question_tool"]["status"]
+from microclaw.config import get_tools_config
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -31,7 +28,9 @@ class AskUserQuestionTool(BaseTool):
 
 
 def create_ask_user_question_tool() -> AskUserQuestionTool | None:
-    if TOOL_STATUS == "on":
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("ask_user_question_tool") or {}).get("status", "off")).lower()
+    if status == "on":
         return AskUserQuestionTool()
     return None 
 

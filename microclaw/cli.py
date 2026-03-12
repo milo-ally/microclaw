@@ -1,21 +1,12 @@
 """
 microclaw - CLI entry point for ComputerUseAgent.
-
-Usage:
-  microclaw tui [--port PORT]
-  microclaw gui [--port PORT] [--gui-port PORT]
-  microclaw tui -- port 7132   # args after -- parsed as port
-
-Examples:
-  microclaw tui               # gateway on 8000, TUI connects to it
-  microclaw tui --port 7132   # gateway on 7132, TUI connects to it
-  microclaw gui -- port 7132  # gateway on 7132, GUI on 7860
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -23,19 +14,27 @@ from pathlib import Path
 
 
 def _find_project_root() -> Path:
-    """Find project root (directory containing gateway.py)."""
-    root = Path(__file__).resolve().parent
-    if (root / "gateway.py").exists():
-        return root
-    raise RuntimeError("Cannot find gateway.py in project root")
+    """
+    Best-effort repo root discovery.
+
+    We prefer walking upwards from the current working directory so that
+    console_script works even when invoked from subdirectories.
+    """
+    start = Path.cwd().resolve()
+    for p in [start, *start.parents]:
+        if (p / "pyproject.toml").exists() and (p / "config.json").exists():
+            return p
+        if (p / "pyproject.toml").exists() and (p / "agent").exists():
+            return p
+    # fallback: directory of this file (editable installs)
+    return Path(__file__).resolve().parents[1]
 
 
 def _is_gateway_ready(url: str, timeout: float = 30.0) -> bool:
-    """Poll until gateway /api/health responds."""
     try:
         import urllib.request
-        req = urllib.request.Request(f"{url.rstrip('/')}/api/health")
 
+        req = urllib.request.Request(f"{url.rstrip('/')}/api/health")
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
@@ -50,13 +49,12 @@ def _is_gateway_ready(url: str, timeout: float = 30.0) -> bool:
 
 
 def _run_gateway(port: int) -> subprocess.Popen:
-    """Start gateway in subprocess with given port."""
     root = _find_project_root()
     env = os.environ.copy()
     env["GATEWAY_HOST"] = "127.0.0.1"
     env["GATEWAY_PORT"] = str(port)
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "gateway:app", "--host", "127.0.0.1", "--port", str(port)],
+        [sys.executable, "-m", "uvicorn", "microclaw.gateway:app", "--host", "127.0.0.1", "--port", str(port)],
         cwd=str(root),
         env=env,
         stdout=subprocess.DEVNULL,
@@ -66,13 +64,11 @@ def _run_gateway(port: int) -> subprocess.Popen:
 
 
 def _run_gui(gateway_url: str, gui_port: int = 7860) -> int:
-    """Run Gradio GUI, connecting to gateway. Returns exit code."""
     root = _find_project_root()
-    gui_module = root / "gui.py"
     env = os.environ.copy()
     env["MICROCLAW_GATEWAY"] = gateway_url
     proc = subprocess.run(
-        [sys.executable, str(gui_module), "--gateway", gateway_url, "--port", str(gui_port)],
+        [sys.executable, "-m", "microclaw.gui", "--gateway", gateway_url, "--port", str(gui_port)],
         cwd=str(root),
         env=env,
     )
@@ -80,13 +76,11 @@ def _run_gui(gateway_url: str, gui_port: int = 7860) -> int:
 
 
 def _run_tui(gateway_url: str) -> int:
-    """Run TUI, connecting to gateway. Returns exit code."""
     root = _find_project_root()
-    tui_module = root / "tui.py"
     env = os.environ.copy()
     env["MICROCLAW_GATEWAY"] = gateway_url
     proc = subprocess.run(
-        [sys.executable, str(tui_module), "--gateway", gateway_url],
+        [sys.executable, "-m", "microclaw.tui", "--gateway", gateway_url],
         cwd=str(root),
         env=env,
     )
@@ -94,39 +88,18 @@ def _run_tui(gateway_url: str) -> int:
 
 
 def _c(text: str, code: str) -> str:
-    """Color helper for onboarding UI."""
     return f"\033[{code}m{text}\033[0m"
 
 
 def _boot_sequence() -> None:
     """
-    Lightweight "kernel boot" animation for TUI/GUI/Onboard entry.
-    Gives a high-level OS bootloader feel without blocking too long.
+    Previously printed a boot animation banner.
+    Now intentionally a no-op to keep startup output minimal.
     """
-    steps = [
-        "Bootloader: initializing microclaw runtime...",
-        "Kernel: loading config.json and environment...",
-        "Kernel: mounting agent workspace and skills...",
-        "Kernel: wiring tools, memory, and sessions...",
-        "I/O: preparing TUI/GUI interfaces...",
-        "System: finalizing startup sequence...",
-    ]
-    if not sys.stdout.isatty():
-        for s in steps:
-            print(s)
-        return
-
-    for s in steps:
-        print(_c("▌", "36;1"), s)
-        time.sleep(0.12)
-    print()
+    return
 
 
 def _splash_ascii() -> None:
-    """
-    Render the same ASCII art banner as the TUI splash,
-    so that `microclaw onboard` feels like a system bootloader.
-    """
     if not sys.stdout.isatty():
         return
     os.system("clear" if os.name != "nt" else "cls")
@@ -154,30 +127,8 @@ def _splash_ascii() -> None:
         )
     )
 
-def _load_config_module():
-    """
-    Import the config module regardless of whether we are running
-    from the editable source tree or from an installed console_script.
-    """
-    root = _find_project_root()
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-    import importlib
-
-    return importlib.import_module("config")
-
 
 def _validate_config(cfg) -> tuple[bool, list[str]]:
-    """
-    Lightweight validator for config.json completeness.
-
-    We only check fields that are required for a healthy runtime:
-    - base_dir
-    - llm.info.{model, base_url, api_key}
-    - embeddings.info.{model, base_url, api_key}
-    - tools block exists with known tool entries; when a tool is enabled,
-      required extra params must be present (e.g. sql_tools.db_uri, tavily_search_tool.tavily_api_key).
-    """
     errors: list[str] = []
 
     base_dir = str(cfg.get("base_dir", "") or "").strip()
@@ -236,23 +187,11 @@ def _validate_config(cfg) -> tuple[bool, list[str]]:
 
 
 def _onboard_config() -> None:
-    """
-    Run step-by-step configuration wizard.
+    from microclaw import config as config_mod
 
-    Goals:
-    - Create or update config.json
-    - Ensure base_dir is set
-    - Collect LLM and Embeddings provider info
-    - Configure tool switches and required extra params
-    """
-    config_mod = _load_config_module()
     cfg = config_mod.load_config()
 
     def _prompt(text: str, default: str | None = None) -> str:
-        """
-        Prompt user with an optional default value.
-        If the user presses enter with no input, the default is returned.
-        """
         label = text
         if default:
             label += f" [default {default}]"
@@ -260,10 +199,6 @@ def _onboard_config() -> None:
         return val or (default or "")
 
     def _prompt_required(text: str, hint: str | None = None) -> str:
-        """
-        Prompt user for a non-empty value with an optional hint (example only).
-        We intentionally do NOT provide true defaults; user must type explicitly.
-        """
         label = text
         if hint:
             label += f" (e.g. {hint})"
@@ -276,19 +211,19 @@ def _onboard_config() -> None:
     print()
     print(_c("Step 1: Workspace settings", "36;1"))
 
-    # 1) base_dir
     base_dir = str(cfg.get("base_dir", "") or "").strip()
     if not base_dir:
-        default_dir = (Path.cwd() / "agent").resolve()
-        print(f"  (Suggested workspace path: {default_dir})")
-        user_input = _prompt_required("  → Enter workspace directory path")
+        from microclaw.config import DEFAULT_WORKSPACE_DIR
+
+        default_dir = DEFAULT_WORKSPACE_DIR.resolve()
+        print(f"  (Default workspace path: {default_dir})")
+        user_input = _prompt("  → Enter workspace directory path", str(default_dir))
         target = Path(user_input).expanduser().resolve()
         config_mod.set_base_dir(str(target))
         print(f"  ✓ base_dir set to: {target}")
     else:
         print(f"  ✓ Using existing base_dir: {base_dir}")
 
-    # 2) platform
     platform_val = str(cfg.get("platform", "") or "").strip()
     if not platform_val:
         import platform as _plat
@@ -301,7 +236,6 @@ def _onboard_config() -> None:
     else:
         print(f"  ✓ Using existing platform: {platform_val}")
 
-    # 3) LLM config
     print()
     print(_c("Step 2: Chat model (LLM) configuration", "36;1"))
     llm_cfg = config_mod.get_llm_config() or {}
@@ -309,7 +243,6 @@ def _onboard_config() -> None:
     llm_info = llm_cfg.get("info") or {}
     llm_model = str(llm_info.get("model", "") or "")
     llm_base_url = str(llm_info.get("base_url", "") or "")
-    llm_api_key = str(llm_info.get("api_key", "") or "")
     llm_temperature = llm_info.get("temperature", 0.2)
     llm_is_reasoning = bool(llm_info.get("is_reasoning_model", True))
     llm_is_vision = bool(llm_info.get("is_vision_model", False))
@@ -327,9 +260,7 @@ def _onboard_config() -> None:
         f"  → Is this a reasoning model? [y/n] (current {'y' if llm_is_reasoning else 'n'}): "
     ).strip().lower()
     llm_is_reasoning = is_reason_str in ("y", "yes", "1", "true")
-    is_vision_str = input(
-        f"  → Is this a vision model? [y/n] (current {'y' if llm_is_vision else 'n'}): "
-    ).strip().lower()
+    is_vision_str = input(f"  → Is this a vision model? [y/n] (current {'y' if llm_is_vision else 'n'}): ").strip().lower()
     llm_is_vision = is_vision_str in ("y", "yes", "1", "true")
 
     config_mod.set_llm_config(
@@ -348,7 +279,6 @@ def _onboard_config() -> None:
     )
     print("  ✓ LLM configuration saved.")
 
-    # 4) Embeddings config
     print()
     print(_c("Step 3: Embeddings model configuration", "36;1"))
     emb_cfg = config_mod.get_embeddings_config() or {}
@@ -356,7 +286,6 @@ def _onboard_config() -> None:
     emb_info = emb_cfg.get("info") or {}
     emb_model = str(emb_info.get("model", "") or "")
     emb_base_url = str(emb_info.get("base_url", "") or "")
-    emb_api_key = str(emb_info.get("api_key", "") or "")
 
     emb_provider = _prompt_required("  → Embeddings provider", emb_provider or "aliyun")
     emb_model = _prompt_required("  → Embeddings model", emb_model or "text-embedding-v3")
@@ -370,16 +299,11 @@ def _onboard_config() -> None:
         {
             "provider": emb_provider,
             "format": "openai",
-            "info": {
-                "model": emb_model,
-                "base_url": emb_base_url,
-                "api_key": emb_api_key,
-            },
+            "info": {"model": emb_model, "base_url": emb_base_url, "api_key": emb_api_key},
         }
     )
     print("  ✓ Embeddings configuration saved.")
 
-    # 5) Tools config
     print()
     print(_c("Step 4: Tool switches", "36;1"))
     tools_cfg = config_mod.get_tools_config() or {}
@@ -397,8 +321,6 @@ def _onboard_config() -> None:
         return s == "on"
 
     new_tools: dict[str, dict[str, str]] = {}
-
-    # Core tools
     for name in [
         "ask_user_question_tool",
         "fetch_url_tool",
@@ -415,32 +337,23 @@ def _onboard_config() -> None:
         enabled = _prompt_on_off(name, current)
         new_tools[name] = {"status": "on" if enabled else "off"}
 
-    # SQL tools
     sql_enabled = _prompt_on_off("sql_tools", _tool_enabled("sql_tools", default=False))
     sql_uri_default = str((tools_cfg.get("sql_tools") or {}).get("db_uri", "") or "")
     sql_uri = sql_uri_default
     if sql_enabled:
         sql_uri = _prompt("  → SQL db_uri (when sql_tools enabled)", sql_uri_default)
-    new_tools["sql_tools"] = {
-        "status": "on" if sql_enabled else "off",
-        "db_uri": sql_uri,
-    }
+    new_tools["sql_tools"] = {"status": "on" if sql_enabled else "off", "db_uri": sql_uri}
 
-    # Tavily search
     tavily_enabled = _prompt_on_off("tavily_search_tool", _tool_enabled("tavily_search_tool", default=False))
     tavily_key_default = str((tools_cfg.get("tavily_search_tool") or {}).get("tavily_api_key", "") or "")
     tavily_key = tavily_key_default
     if tavily_enabled:
         tavily_key = _prompt("  → Tavily API key (tvly-...)", tavily_key_default)
-    new_tools["tavily_search_tool"] = {
-        "status": "on" if tavily_enabled else "off",
-        "tavily_api_key": tavily_key,
-    }
+    new_tools["tavily_search_tool"] = {"status": "on" if tavily_enabled else "off", "tavily_api_key": tavily_key}
 
     config_mod.set_managedb_config(new_tools)
     print("  ✓ Tool switches saved.")
 
-    # Final validation summary
     print()
     cfg_after = config_mod.load_config()
     ok, errors = _validate_config(cfg_after)
@@ -452,19 +365,51 @@ def _onboard_config() -> None:
             print(f"  - {msg}")
         print("You can re-run `microclaw onboard` later to fix these.")
 
+    # Best-effort: initialize workspace directory structure from template agent/
+    # So that base_dir is ready immediately after onboarding.
+    try:
+        base_dir_val = str(cfg_after.get("base_dir", "") or "").strip()
+        if base_dir_val:
+            template = Path(config_mod.CONFIG_FILE).parent / "agent"
+            target = Path(base_dir_val).expanduser().resolve()
+            if template.exists():
+                print()
+                print(_c("Step 5: Initializing workspace directory", "36;1"))
+                print(f"  Template: {template}")
+                print(f"  Target  : {target}")
+                created_files = 0
+                created_dirs = 0
+                for src in template.rglob("*"):
+                    rel = src.relative_to(template)
+                    dst = target / rel
+                    if src.is_dir():
+                        if not dst.exists():
+                            created_dirs += 1
+                        dst.mkdir(parents=True, exist_ok=True)
+                    else:
+                        if not dst.exists():
+                            dst.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(src, dst)
+                            created_files += 1
+                print(f"  ✓ Workspace initialized (new dirs: {created_dirs}, new files: {created_files})")
+            else:
+                print(_c("Warning: agent/ template directory not found; workspace was not initialized.", "33;1"))
+    except Exception:
+        # Do not block onboarding if workspace initialization fails.
+        pass
+
 
 def _cmd_gui(args: argparse.Namespace) -> int:
     port = args.port
     gui_port = getattr(args, "gui_port", 7860)
     gateway_url = f"http://127.0.0.1:{port}"
 
-    # Ensure config is present and reasonably complete before booting GUI.
-    config_mod = _load_config_module()
+    from microclaw import config as config_mod
+
     cfg = config_mod.load_config()
     ok, _ = _validate_config(cfg)
     if not ok:
         print(_c("Config is missing or incomplete. Redirecting to onboarding wizard...", "33;1"))
-        # Reuse onboard flow (will let user choose TUI/GUI).
         return _cmd_onboard(args)
 
     _boot_sequence()
@@ -486,8 +431,8 @@ def _cmd_tui(args: argparse.Namespace) -> int:
     port = args.port
     gateway_url = f"http://127.0.0.1:{port}"
 
-    # Ensure config is present and reasonably complete before booting TUI.
-    config_mod = _load_config_module()
+    from microclaw import config as config_mod
+
     cfg = config_mod.load_config()
     ok, _ = _validate_config(cfg)
     if not ok:
@@ -509,21 +454,12 @@ def _cmd_tui(args: argparse.Namespace) -> int:
 
 
 def _cmd_onboard(args: argparse.Namespace) -> int:
-    """
-    Interactive onboarding wizard:
-    - Configure base_dir and show LLM settings
-    - Start gateway and verify connectivity
-    - Let user choose to launch TUI or GUI
-    """
     port = args.port
     gui_port_default = 7860
     gateway_url = f"http://127.0.0.1:{port}"
 
-    # Header with a bit of "OS bootloader" feel (reuse TUI ASCII art)
     _splash_ascii()
     _boot_sequence()
-
-    # 1) Config wizard
     _onboard_config()
 
     print()
@@ -537,7 +473,6 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
         print(_c("  ✓ Gateway online", "32;1"))
         print(f"    URL: {gateway_url}")
 
-        # 2) Choose interface
         print()
         print(_c("Step 4: Choose interface to launch", "36;1"))
         print("  [1] TUI (terminal interface)")
@@ -546,7 +481,6 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
         choice = input("  → Select [1/2/3, default 1]: ").strip() or "1"
 
         if choice == "2":
-            # Optional GUI port override
             gui_port_in = input(f"  → GUI port [default {gui_port_default}]: ").strip()
             try:
                 gui_port = int(gui_port_in) if gui_port_in else gui_port_default
@@ -564,7 +498,6 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
         print()
         print(_c("Onboarding complete. No UI launched.", "33;1"))
         return 0
-
     finally:
         proc.terminate()
         try:
@@ -574,7 +507,6 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
 
 
 def _parse_extra_port(extra: list[str]) -> int | None:
-    """Parse 'port 7132' from extra args after --."""
     for i, tok in enumerate(extra):
         if tok.lower() == "port" and i + 1 < len(extra):
             try:
@@ -586,10 +518,9 @@ def _parse_extra_port(extra: list[str]) -> int | None:
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv or sys.argv[1:]
-    # Handle "openclaw tui -- port 7132" style: split at -- and parse port from remainder
     if "--" in argv:
         idx = argv.index("--")
-        before, after = argv[:idx], argv[idx + 1:]
+        before, after = argv[:idx], argv[idx + 1 :]
         extra_port = _parse_extra_port(after)
         if extra_port is not None:
             argv = before + ["--port", str(extra_port)]
@@ -642,3 +573,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

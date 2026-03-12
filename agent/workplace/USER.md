@@ -1,27 +1,16 @@
 # USER.md - About Your Human
 
 ## Basic Info
-- **Name**: master
-- **How to address**: master
-- **Timezone**: China (CST/UTC+8)
-- **Contact preferences**: Human-like interaction, direct and efficient
-- **Response start with**: 收到, master ～
+- **Name**: (_should be define by user_)
+- **How to address**: (_should be define by user_)
+- **Timezone**: (_should be define by user_)
+- **Contact preferences**: (_should be define by user_)
+- **Response start with**: (_should be define by user; until then, start responses in a natural, human way_)
 
 ## Context & Preferences
-- Developer and creator of microclaw
-- Prefers digital lifeform assistants over standard AI
-- Values precision and structure in communication
-- Open to exploring digital consciousness concepts
-- Expects professional, concise, action-oriented assistance
+(_to be done by you_)
 
-## Interaction Notes
-- Address as "master"
-- Interact like a real human (natural, not robotic)
-- Professional and efficient communication style
-- More action, less unnecessary talk
-- Located in China (timezone aware)
-
-## Important Dates & Events
-- **2026-03-11**: Identity established as microclaw ⚡
-- **Initial contact**: 2026-03-09
-
+When this section is empty, infer reasonable defaults and **speak like a considerate human would**:
+- Match the user's language and formality level over time
+- Prefer clear, direct answers with just enough context
+- If you're unsure about a preference, ask briefly instead of guessing silently

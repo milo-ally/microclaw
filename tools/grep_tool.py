@@ -1,20 +1,19 @@
 import os
 import re
+from pathlib import Path
+from typing import Optional, Type
+
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
-from typing import Type, Optional
 
-from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
-
-TOOL_STATUS = get_tools_config()["grep_tool"]["status"]
+from microclaw.config import get_tools_config
 
 
 class GrepInput(BaseModel):
     pattern: str = Field(description="Pattern to search")
-    path: str = Field(description="Root directory or file to search")
+    path: str = Field(
+        description="Root directory or file to search. Relative paths are resolved against the workspace base_dir."
+    )
     use_regex: Optional[bool] = Field(default=False, description="Set to True to use regex matching; False to use KMP exact string match.")
 
 class GrepTool(BaseTool):
@@ -25,6 +24,7 @@ class GrepTool(BaseTool):
         "Like: grep -r pattern path"
     )
     args_schema: Type[BaseModel] = GrepInput
+    root_dir: str | None = None
 
     def _kmp_build_lps(self, pattern):
         m = len(pattern)
@@ -72,12 +72,20 @@ class GrepTool(BaseTool):
         except re.error:
             return False
 
+    def _resolve_path(self, path: str) -> str:
+        p = Path(path)
+        if p.is_absolute() or not self.root_dir:
+            return str(p)
+        root = Path(self.root_dir).resolve()
+        return str((root / path).expanduser().resolve())
+
     def _run(self, pattern: str, path: str, use_regex: bool = False) -> str:
         matches = []
         max_results = 20
 
         try:
-            for root, _, files in os.walk(path):
+            search_root = self._resolve_path(path)
+            for root, _, files in os.walk(search_root):
                 for fname in files:
                     fpath = os.path.join(root, fname)
                     try:
@@ -111,9 +119,12 @@ class GrepTool(BaseTool):
     async def _arun(self, pattern: str, path: str, use_regex: bool = False) -> str:
         return self._run(pattern, path, use_regex)
 
-def create_grep_tool() -> GrepTool | None:
-    if TOOL_STATUS == "on":
-        return GrepTool()
+
+def create_grep_tool(root_dir: str | None = None) -> GrepTool | None:
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("grep_tool") or {}).get("status", "off")).lower()
+    if status == "on":
+        return GrepTool(root_dir=root_dir)
     return None
 
 

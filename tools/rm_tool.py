@@ -1,39 +1,52 @@
-import os
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type
+from __future__ import annotations
 
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import get_tools_config
+from typing import Type
 
-TOOL_STATUS = get_tools_config()["rm_tool"]["status"]
+from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+
+from microclaw.config import get_tools_config
+
 
 class RmInput(BaseModel):
-    filepath: str = Field(description="Path to the file to delete")
+    filepath: str = Field(
+        description="Path to the file to delete. Relative paths are resolved against the workspace base_dir."
+    )
+
 
 class RmTool(BaseTool):
     name: str = "rm"
     description: str = "Delete a single file. Does not delete directories."
     args_schema: Type[BaseModel] = RmInput
+    root_dir: str | None = None
+
+    def _resolve_path(self, filepath: str) -> Path:
+        p = Path(filepath)
+        if p.is_absolute() or not self.root_dir:
+            return p
+        root = Path(self.root_dir).resolve()
+        return (root / filepath).expanduser().resolve()
 
     def _run(self, filepath: str) -> str:
         try:
-            if not os.path.isfile(filepath):
-                return f"Error: file not found - {filepath}"
-
-            os.remove(filepath)
-            return f"Success: deleted file - {filepath}"
+            target = self._resolve_path(filepath)
+            if not target.is_file():
+                return f"Error: file not found - {target}"
+            target.unlink()
+            return f"Success: deleted file - {target}"
         except Exception as e:
             return f"Error: {str(e)}"
 
     async def _arun(self, filepath: str) -> str:
         return self._run(filepath)
 
-def create_rm_tool() -> RmTool | None:
-    if TOOL_STATUS == "on":
-        return RmTool()
+
+def create_rm_tool(root_dir: str | None = None) -> RmTool | None:
+    tools_cfg = get_tools_config() or {}
+    status = str((tools_cfg.get("rm_tool") or {}).get("status", "off")).lower()
+    if status == "on":
+        return RmTool(root_dir=root_dir)
     return None
 
 
