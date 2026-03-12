@@ -36,6 +36,33 @@ app.add_middleware(
 )
 
 
+def _template_dir() -> Path:
+    """
+    Resolve the agent template directory.
+
+    In some layouts (like this project), the repository root contains a
+    `microclaw/agent` directory instead of a top-level `agent` directory.
+    We prefer CONFIG_FILE.parent / "agent", but fall back to
+    CONFIG_FILE.parent / "microclaw" / "agent" when needed.
+    """
+    primary = CONFIG_FILE.parent / "agent"
+    if primary.exists():
+        return primary
+
+    alt = CONFIG_FILE.parent / "microclaw" / "agent"
+    if alt.exists():
+        return alt
+
+    # Preserve previous behaviour if nothing is found, but clarify path.
+    raise HTTPException(
+        status_code=500,
+        detail=(
+            f"Template not found. Tried: {primary} and {alt}. "
+            "Cannot initialize workspace."
+        ),
+    ) from None
+
+
 @app.on_event("startup")
 def _startup_init() -> None:
     try:
@@ -72,12 +99,7 @@ class ChatStreamRequest(BaseModel):
 
 
 def _ensure_runtime_initialized(base_dir: Path) -> None:
-    template = CONFIG_FILE.parent / "agent"
-    if not template.exists():
-        raise HTTPException(
-            status_code=500,
-            detail=f"Template not found: {template}. Cannot initialize workspace.",
-        ) from None
+    template = _template_dir()
 
     base_dir = base_dir.resolve()
     if not base_dir.exists():
@@ -99,12 +121,7 @@ def _ensure_runtime_initialized(base_dir: Path) -> None:
 
 
 def _init_workspace_from_template(target_dir: Path) -> None:
-    template = CONFIG_FILE.parent / "agent"
-    if not template.exists():
-        raise HTTPException(
-            status_code=500,
-            detail=f"Template not found: {template}. Cannot initialize workspace.",
-        ) from None
+    template = _template_dir()
     target_dir = target_dir.resolve()
     target_dir.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(template, target_dir)

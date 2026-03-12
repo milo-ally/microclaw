@@ -76,23 +76,18 @@ if errorlevel 1 (
 echo.
 echo Installation completed successfully!
 echo.
-echo Tip: For CLI mode, you can run: microclaw onboard
+echo microclaw environment is ready.
 echo.
-echo Starting microclaw GUI on port 8000...
+echo Next steps (Windows):
+echo   1^)  Activate venv:
+echo        call .venv\Scripts\activate.bat
+echo   2^)  Start gateway ^(in one terminal^):
+echo        python -m uvicorn microclaw.gateway:app --host 127.0.0.1 --port 8000
+echo   3^)  Start TUI ^(in another terminal^):
+echo        python -m microclaw.tui --gateway http://127.0.0.1:8000
+echo       or start GUI:
+echo        microclaw gui --port 8000
 echo.
-
-:: Start microclaw GUI
-microclaw gui --port 8000
-
-if errorlevel 1 (
-    echo.
-    echo Error: Failed to start microclaw GUI!
-    echo Please check if the installation was successful.
-    echo.
-    echo To activate the virtual environment, run: %VENV_NAME%\Scripts\activate.bat
-    echo After activation, start the program with: microclaw onboard
-    pause
-    exit /b 1
-)
-
+echo This script only installs dependencies and does not start services automatically.
+echo.
 pause

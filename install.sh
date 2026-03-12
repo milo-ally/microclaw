@@ -30,14 +30,17 @@ pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 echo ""
 echo "Installation completed successfully!"
 echo ""
-echo "Starting microclaw GUI on port 8000..."
-echo "============================================"
+echo "microclaw environment is ready."
 echo ""
+echo "Next steps (Linux / macOS):"
+echo "  1) Activate venv:"
+echo "       source .venv/bin/activate"
+echo "  2) Start gateway (in one terminal):"
+echo "       python -m uvicorn microclaw.gateway:app --host 127.0.0.1 --port 8000"
+echo "  3) Start TUI (in another terminal):"
+echo "       python -m microclaw.tui --gateway http://127.0.0.1:8000"
+echo "     or start GUI:"
+echo "       microclaw gui --port 8000"
+echo ""
+echo "This script only installs dependencies and does not start services automatically."
 
-# 启动 microclaw GUI
-if ! microclaw gui --port 8000; then
-    echo ""
-    echo "Error: Failed to start microclaw GUI!"
-    echo "Please check if the installation was successful."
-    exit 1
-fi
