@@ -170,7 +170,14 @@ def show_openai_compat_notice() -> None:
         "**OpenAI-compatible API**.\n"
         "That means the config should look like:\n"
         '  - chat: {"format":"openai","info":{"model":...,"base_url":...,"api_key":...}}\n'
-        '  - embeddings: {"format":"openai","info":{"model":...,"base_url":...,"api_key":...}}\n'
+        '  - embeddings: {"format":"openai","info":{"model":...,"base_url":...,"api_key":...}}\n\n'
+        "Supported values for `llm.info.model` in this project are:\n"
+        "  - deepseek-chat       (set llm.info.is_reasoning_model = false)\n"
+        "  - deepseek-reasoner   (set llm.info.is_reasoning_model = true)\n"
+        "  - MiniMax-M2.5        (set llm.info.is_reasoning_model = true, MiniMax reasoning_split enabled)\n"
+        "  - glm-5               (chat when is_reasoning_model = false; reasoning when true)\n"
+        "\n"
+        "If you choose a different model name, the gateway will currently reject it as unsupported.\n"
     )
 
 
