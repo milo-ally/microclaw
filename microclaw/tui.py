@@ -377,10 +377,60 @@ def flow_chat(client: GatewayClient) -> None:
     except Exception:
         pass
 
-    boot_md = prompt_bool("boot? ", False)
-
+    # Let user pick a session (new or existing) to provide context.
     session_id = _new_session_id()
+    try:
+        with spinner("Loading sessions"):
+            sessions = client.list_sessions()
+    except Exception:
+        sessions = []
+
+    if sessions:
+        print()
+        section("Choose session")
+        print("  1) New session (recommended)")
+        max_list = min(len(sessions), 10)
+        for idx, s in enumerate(sessions[:max_list], start=2):
+            sid = s.get("id", "")
+            stitle = s.get("title", "")
+            print(f"  {idx}) {sid}  ·  {stitle}")
+        while True:
+            sel = input(f"Select [1-{max_list+1}, default 1]: ").strip() or "1"
+            if not sel.isdigit():
+                warn("Please enter a number.")
+                continue
+            n = int(sel)
+            if n == 1:
+                break
+            if 2 <= n <= max_list + 1:
+                session_id = sessions[n - 2].get("id", session_id)
+                break
+            warn("Invalid selection.")
+
+        if session_id and session_id != "":
+            try:
+                with spinner(f"Loading session '{session_id}'"):
+                    raw = client.get_session(session_id)
+                msgs = raw.get("messages", [])
+                if msgs:
+                    section("Recent context")
+                    for m in msgs[-6:]:
+                        role = m.get("role", "")
+                        content = (m.get("content", "") or "").strip()
+                        if len(content) > 200:
+                            content = content[:197] + "..."
+                        if role == "user":
+                            print(_c("You:", "36") + f" {content}")
+                        else:
+                            print(_c("Assistant:", "32") + f" {content}")
+                else:
+                    info("(empty session)")
+            except Exception as e:
+                warn(f"Could not load history: {e}")
+
     info(f"New session: {session_id}")
+
+    boot_md = prompt_bool("boot? ", False)
     show_reasoning = prompt_bool("Show reasoning tokens (if reasoning model)", False)
     image_url = prompt("image_url (optional)", "")
     image_url = image_url.strip() or None
