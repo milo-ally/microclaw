@@ -363,6 +363,20 @@ def flow_chat(client: GatewayClient) -> None:
     title("microclaw · Chat (streaming)")
     show_openai_compat_notice()
 
+    # Show current model so user knows what is active.
+    try:
+        cfg = client.get_config()
+        llm = cfg.get("llm") or {}
+        info_block = llm.get("info") or {}
+        model_name = str(info_block.get("model", "") or "").strip()
+        base_url = str(info_block.get("base_url", "") or "").strip()
+        is_reasoning = bool(info_block.get("is_reasoning_model", False))
+        if model_name:
+            kind = "reasoning" if is_reasoning else "chat"
+            info(f"Current LLM: {model_name}  ({kind}, base_url={base_url or 'n/a'})")
+    except Exception:
+        pass
+
     boot_md = prompt_bool("boot? ", False)
 
     session_id = _new_session_id()
