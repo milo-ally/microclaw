@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import webbrowser
 import shutil
 import subprocess
 import sys
@@ -265,27 +266,70 @@ def _onboard_config() -> None:
     print()
     print(_c("Step 2: Chat model (LLM) configuration", "36;1"))
     llm_cfg = config_mod.get_llm_config() or {}
-    llm_provider = str(llm_cfg.get("provider", "") or "")
     llm_info = llm_cfg.get("info") or {}
-    llm_model = str(llm_info.get("model", "") or "")
-    llm_base_url = str(llm_info.get("base_url", "") or "")
     llm_temperature = llm_info.get("temperature", 0.2)
     llm_is_reasoning = bool(llm_info.get("is_reasoning_model", True))
     llm_is_vision = bool(llm_info.get("is_vision_model", False))
 
-    llm_provider = _prompt_required("  → LLM provider", llm_provider or "deepseek")
-    llm_model = _prompt_required("  → LLM model", llm_model or "deepseek-reasoner")
-    llm_base_url = _prompt_required("  → LLM base_url", llm_base_url or "https://api.deepseek.com")
+    print("  Choose a supported chat model (enter number 1-5):")
+    print("    1) deepseek-chat        · fast chat")
+    print("    2) deepseek-reasoner    · reasoning model")
+    print("    3) MiniMax-M2.5         · reasoning model (MiniMax)")
+    print("    4) glm-5 (chat)         · GLM chat")
+    print("    5) glm-5 (reasoning)    · GLM reasoning")
+
+    def _pick_model() -> tuple[str, str, str, bool]:
+        while True:
+            choice = input("  → Select [1-5, default 2]: ").strip() or "2"
+            if choice not in {"1", "2", "3", "4", "5"}:
+                print("  Please enter a number between 1 and 5.")
+                continue
+            if choice == "1":
+                return "deepseek", "deepseek-chat", "https://api.deepseek.com", False
+            if choice == "2":
+                return "deepseek", "deepseek-reasoner", "https://api.deepseek.com", True
+            if choice == "3":
+                return "minimax", "MiniMax-M2.5", "https://api.minimax.chat/v1", True
+            if choice == "4":
+                return "glm", "glm-5", "https://open.bigmodel.cn/api/paas/v4", False
+            if choice == "5":
+                return "glm", "glm-5", "https://open.bigmodel.cn/api/paas/v4", True
+
+    llm_provider, llm_model, llm_base_url, llm_is_reasoning = _pick_model()
+    print(f"  ✓ Using model: {llm_model}  (provider={llm_provider}, base_url={llm_base_url})")
+
+    # Friendly shortcut: open provider console for API key.
+    try:
+        if llm_provider == "deepseek":
+            print("  → Opening DeepSeek console in your browser (https://platform.deepseek.com) ...")
+            webbrowser.open("https://platform.deepseek.com", new=2, autoraise=True)
+        elif llm_provider == "minimax":
+            print(
+                "  → Opening MiniMax key management page "
+                "(https://platform.minimaxi.com/user-center/basic-information/interface-key) ..."
+            )
+            webbrowser.open(
+                "https://platform.minimaxi.com/user-center/basic-information/interface-key",
+                new=2,
+                autoraise=True,
+            )
+        elif llm_provider == "glm":
+            print(
+                "  → Opening Zhipu GLM API key page "
+                "(https://bigmodel.cn/usercenter/proj-mgmt/apikeys) ..."
+            )
+            webbrowser.open("https://bigmodel.cn/usercenter/proj-mgmt/apikeys", new=2, autoraise=True)
+    except Exception:
+        # Best-effort only; failure to open browser should not break onboarding.
+        pass
+
     llm_api_key = _prompt_required("  → LLM api_key (sk-...)")
     try:
         temp_in = input(f"  → LLM temperature (0.0-2.0, current {llm_temperature}): ").strip()
         llm_temperature = float(temp_in or llm_temperature)
     except Exception:
         pass
-    is_reason_str = input(
-        f"  → Is this a reasoning model? [y/n] (current {'y' if llm_is_reasoning else 'n'}): "
-    ).strip().lower()
-    llm_is_reasoning = is_reason_str in ("y", "yes", "1", "true")
+    # llm_is_reasoning is implied by the menu choice above
     is_vision_str = input(f"  → Is this a vision model? [y/n] (current {'y' if llm_is_vision else 'n'}): ").strip().lower()
     llm_is_vision = is_vision_str in ("y", "yes", "1", "true")
 
