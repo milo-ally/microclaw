@@ -373,7 +373,7 @@ def flow_chat(client: GatewayClient) -> None:
         is_reasoning = bool(info_block.get("is_reasoning_model", False))
         if model_name:
             kind = "reasoning" if is_reasoning else "chat"
-            info(f"Current LLM: {model_name}  ({kind}, base_url={base_url or 'n/a'})")
+            info(f"Current LLM: {model_name}  ({kind})")
     except Exception:
         pass
 
