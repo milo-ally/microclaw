@@ -673,7 +673,13 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                 config_status = gr.Markdown("_Click Load to fetch config._")
                 gr.Markdown(
                     "**Important:** This project only supports **OpenAI-compatible** providers. "
-                    'Keep `llm.format` and `embeddings.format` as `"openai"`.'
+                    'Keep `llm.format` and `embeddings.format` as `"openai"`.\n\n'
+                    "**Supported `llm.info.model` values in this version:**\n\n"
+                    "- `deepseek-chat` — set `llm.info.is_reasoning_model = false`\n"
+                    "- `deepseek-reasoner` — set `llm.info.is_reasoning_model = true`\n"
+                    "- `MiniMax-M2.5` — set `llm.info.is_reasoning_model = true` (MiniMax reasoning_split enabled)\n"
+                    "- `glm-5` — chat when `is_reasoning_model = false`, reasoning when `true`\n\n"
+                    "Other model names are currently treated as unsupported by the gateway."
                 )
                 with gr.Row():
                     config_load_btn = gr.Button("Load config")
