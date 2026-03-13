@@ -17,7 +17,9 @@ from microclaw.config import get_deepagent
 from .model import (
     DeepSeekChatModel, 
     DeepSeekReasoningModel, 
-    MinimaxReasoningModel
+    MinimaxReasoningModel,
+    GLMReasoningModel, 
+    GLMChatModel
 )
 from .session_manager import session_manager
 from .prompt_builder import build_system_prompt
@@ -30,7 +32,7 @@ def get_model(
     is_reasoning_model: bool
 ) -> ChatOpenAI:
 
-    if model_name == "deepseek-chat":
+    if model_name == "deepseek-chat" and not is_reasoning_model:
         llm_info = (get_llm_config().get("info"))
         return DeepSeekChatModel(
             model=model_name,
@@ -39,7 +41,7 @@ def get_model(
             temperature=llm_info.get("temperature"),
         )
 
-    elif model_name == "deepseek-reasoner":
+    elif model_name == "deepseek-reasoner" and is_reasoning_model:
         llm_info = (get_llm_config().get("info"))
         return DeepSeekReasoningModel(
             model=model_name,
@@ -48,7 +50,7 @@ def get_model(
             temperature=llm_info.get("temperature"),
         )
 
-    elif model_name == "MiniMax-M2.5":
+    elif model_name == "MiniMax-M2.5" and is_reasoning_model:
         llm_info = (get_llm_config().get("info"))
         return MinimaxReasoningModel(
             model=model_name,
@@ -58,11 +60,29 @@ def get_model(
             extra_body={"reasoning_split": True}
         )
 
+    elif model_name == "glm-5" and is_reasoning_model:
+        llm_info = (get_llm_config().get("info"))
+        return GLMReasoningModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url"),
+            temperature=llm_info.get("temperature"),
+            extra_body={"thinking": {"type": "enabled"}},
+        )
 
+    elif model_name == "glm-5" and not is_reasoning_model:
+        llm_info = (get_llm_config().get("info"))
+        return GLMChatModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url"),
+            temperature=llm_info.get("temperature"),
+        )
 
+    
     raise RuntimeError(
         f"Unsupported llm.info.model '{model_name}'. "
-        "Expected one of: 'deepseek-chat', 'deepseek-reasoner', 'MiniMax-M2.5'"
+        "Expected one of: 'deepseek-chat', 'deepseek-reasoner', 'MiniMax-M2.5', 'glm-5'"
     )
 
 
