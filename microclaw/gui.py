@@ -390,7 +390,7 @@ def _current_model_ui() -> str:
         if not model_name:
             return "_No LLM configured. Go to **Config** tab to set one._"
         kind = "reasoning" if is_reasoning else "chat"
-        return f"**Current LLM:** `{model_name}`  ·  _{kind}_  ·  base_url=`{base_url or 'n/a'}`"
+        return f"**Current LLM:** `{model_name}`  ·  _{kind}_  · "
     except Exception as e:
         return f"_Could not load current model: {e}_"
 
