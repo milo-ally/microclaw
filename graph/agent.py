@@ -16,12 +16,12 @@ from microclaw.config import get_deepagent
 
 from .model import (
     DeepSeekChatModel, 
-    DeepSeekReasoningModel
+    DeepSeekReasoningModel, 
+    MinimaxReasoningModel
 )
 from .session_manager import session_manager
 from .prompt_builder import build_system_prompt
 from .memory_indexer import get_memory_indexer
-import asyncio
 
 
 def get_model(
@@ -48,11 +48,21 @@ def get_model(
             temperature=llm_info.get("temperature"),
         )
 
+    elif model_name == "MiniMax-M2.5":
+        llm_info = (get_llm_config().get("info"))
+        return MinimaxReasoningModel(
+            model=model_name,
+            api_key=llm_info.get("api_key"),
+            base_url=llm_info.get("base_url"),
+            temperature=llm_info.get("temperature"),
+            extra_body={"reasoning_split": True}
+        )
+
 
 
     raise RuntimeError(
         f"Unsupported llm.info.model '{model_name}'. "
-        "Expected one of: 'deepseek-chat', 'deepseek-reasoner'"
+        "Expected one of: 'deepseek-chat', 'deepseek-reasoner', 'MiniMax-M2.5'"
     )
 
 
@@ -197,6 +207,7 @@ Summary:"""
             {"type": "text", "text": user_message}
         ]))
         return messages
+
     async def astream(
         self, 
         message: str, 
