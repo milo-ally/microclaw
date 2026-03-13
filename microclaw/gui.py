@@ -377,6 +377,24 @@ def _load_session_ui(session_id: str) -> tuple[list[dict[str, str]], str]:
         return [], session_id
 
 
+def _current_model_ui() -> str:
+    """Return a friendly description of the currently configured LLM model."""
+    try:
+        c = _client_or_raise()
+        cfg = c.get_config()
+        llm = cfg.get("llm") or {}
+        info = llm.get("info") or {}
+        model_name = str(info.get("model", "") or "").strip()
+        base_url = str(info.get("base_url", "") or "").strip()
+        is_reasoning = bool(info.get("is_reasoning_model", False))
+        if not model_name:
+            return "_No LLM configured. Go to **Config** tab to set one._"
+        kind = "reasoning" if is_reasoning else "chat"
+        return f"**Current LLM:** `{model_name}`  ·  _{kind}_  ·  base_url=`{base_url or 'n/a'}`"
+    except Exception as e:
+        return f"_Could not load current model: {e}_"
+
+
 def _chat_stream_ui(message: str, history: list[dict[str, str]], session_id: str) -> Generator[list[dict[str, str]], None, None]:
     def _is_tool_like_chunk(text: str) -> bool:
         t = (text or "").lstrip()
@@ -607,6 +625,7 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
         with gr.Tabs():
             with gr.TabItem("💬 Chat"):
                 with gr.Column(elem_classes=["chat-main"]):
+                    model_md = gr.Markdown("_Current LLM: loading..._")
                     with gr.Row():
                         refresh_sessions_btn = gr.Button("🔄", scale=0)
                         sessions_dd = gr.Dropdown(
@@ -667,7 +686,9 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                 ).then(_refresh_choices_after_send, inputs=[session_id_state], outputs=[sessions_dd])
                 clear_btn.click(lambda: [], outputs=[chatbot])
                 clean_btn.click(_cleanup_workspace_ui, outputs=[clean_status])
-                demo.load(_refresh_sessions, outputs=[sessions_dd, session_id_state])
+                demo.load(_refresh_sessions, outputs=[sessions_dd, session_id_state]).then(
+                    _current_model_ui, outputs=[model_md]
+                )
 
             with gr.TabItem("⚙️ Config"):
                 config_status = gr.Markdown("_Click Load to fetch config._")
