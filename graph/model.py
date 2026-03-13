@@ -5,16 +5,15 @@ from langchain_core.language_models.chat_models import ChatResult
 from langchain_openai import ChatOpenAI
 
 
-
-class DeepSeekChatModel(ChatOpenAI):
+class ChatModel(ChatOpenAI):
     
     def __init__(
         self, 
         model: str, 
         api_key: str, 
-        base_url: str = "https://api.deepseek.com", 
-        temperature: float = 0.7,  # 增加默认值，和父类一致
-        **kwargs  # 兼容父类的其他参数（如 max_tokens、timeout 等）
+        base_url: str, 
+        temperature: float = 0.3,
+        **kwargs  # eg: extra_body
     ):
         # 调用父类初始化，传递所有参数
         super().__init__(
@@ -25,15 +24,16 @@ class DeepSeekChatModel(ChatOpenAI):
             **kwargs  # 传递其他参数，保证兼容性
         )
 
-class DeepSeekReasoningModel(ChatOpenAI):
+
+class ReasoningModel(ChatOpenAI):
 
     def __init__(
         self, 
         model: str, 
         api_key: str, 
-        base_url: str = "https://api.deepseek.com", 
-        temperature: float = 0.7,  # 增加默认值，和父类一致
-        **kwargs  # 兼容父类的其他参数（如 max_tokens、timeout 等）
+        base_url: str , 
+        temperature: float = 0.3, 
+        **kwargs  # eg: extra_body
     ):
         # 调用父类初始化，传递所有参数
         super().__init__(
@@ -67,7 +67,7 @@ class DeepSeekReasoningModel(ChatOpenAI):
         response,
         generation_info: dict | None = None,
     ) -> ChatResult:
-        """处理非流式响应，提取 reasoning_content"""
+        """Extract reasoning_content"""
         result = super()._create_chat_result(response, generation_info)
         if not result.generations:
             return result
@@ -82,7 +82,7 @@ class DeepSeekReasoningModel(ChatOpenAI):
     def _convert_chunk_to_generation_chunk(
         self, chunk, default_chunk_class, base_generation_info
     ):
-        """流式时从 delta 提取 reasoning_content"""
+        """Extract reasoning_content from delta"""
         gen = super()._convert_chunk_to_generation_chunk(
             chunk, default_chunk_class, base_generation_info
         )
@@ -96,39 +96,3 @@ class DeepSeekReasoningModel(ChatOpenAI):
                 if isinstance(msg, AIMessageChunk):
                     msg.additional_kwargs["reasoning_content"] = delta["reasoning_content"]
         return gen
-
-class DoubaoChatModel(ChatOpenAI):
-    def __init__(
-        self, 
-        model: str, 
-        api_key: str, 
-        base_url: str = "https://ark.cn-beijing.volces.com/api/v3", 
-        temperature: float = 0.7,  # 增加默认值，和父类一致
-        **kwargs  # 兼容父类的其他参数（如 max_tokens、timeout 等）
-    ):
-        # 调用父类初始化，传递所有参数
-        super().__init__(
-            model=model, 
-            api_key=api_key, 
-            base_url=base_url, 
-            temperature=temperature,
-            **kwargs  # 传递其他参数，保证兼容性
-        )
-
-class DoubaoReasoningModel(DeepSeekReasoningModel):
-    def __init__(
-        self, 
-        model: str, 
-        api_key: str, 
-        base_url: str = "https://ark.cn-beijing.volces.com/api/v3", 
-        temperature: float = 0.7,  # 增加默认值，和父类一致
-        **kwargs  # 兼容父类的其他参数（如 max_tokens、timeout 等）
-    ):
-        # 调用父类初始化，传递所有参数
-        super().__init__(
-            model=model, 
-            api_key=api_key, 
-            base_url=base_url, 
-            temperature=temperature,
-            **kwargs  # 传递其他参数，保证兼容性
-        )
