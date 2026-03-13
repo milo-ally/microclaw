@@ -1,0 +1,42 @@
+{
+  "base_dir": "~/.microclaw",
+  "platform": "Linux",
+  "llm": {
+    "provider": "deepseek",
+    "format": "openai",
+    "info": {
+      "model": "deepseek-chat",
+      "base_url": "https://api.deepseek.com",
+      "api_key": "sk-REPLACE_ME",
+      "temperature": 0.2,
+      "is_reasoning_model": false,
+      "is_vision_model": false
+    }
+  },
+  "embeddings": {
+    "provider": "openai",
+    "format": "openai",
+    "info": {
+      "model": "text-embedding-3-small",
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "sk-REPLACE_ME"
+    }
+  },
+  "rag_mode": false,
+  "deepagent": false,
+  "tools": {
+    "ask_user_question_tool": { "status": "on" },
+    "fetch_url_tool": { "status": "on" },
+    "python_repl_tool": { "status": "on" },
+    "read_file_tool": { "status": "on" },
+    "terminal_tool": { "status": "on" },
+    "rm_tool": { "status": "on" },
+    "sed_all_tool": { "status": "on" },
+    "sed_first_tool": { "status": "on" },
+    "write_tool": { "status": "on" },
+    "grep_tool": { "status": "on" },
+    "sql_tools": { "status": "off", "db_uri": "" },
+    "tavily_search_tool": { "status": "off", "tavily_api_key": "" }
+  }
+}
+

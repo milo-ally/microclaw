@@ -9,3 +9,6 @@ agent/sessions/*.json
 test.ipynb
 *.egg-info/
 tutorial.ipynb
+/tutorial.ipynb
+**/tutorial.ipynb
+.ipynb_checkpoints/
