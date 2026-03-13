@@ -15,8 +15,8 @@ from microclaw.config import get_llm_config, get_base_dir, get_rag_mode
 from microclaw.config import get_deepagent
 
 from .model import (
-    ChatModel, 
-    ReasoningModel
+    DeepSeekChatModel, 
+    DeepSeekReasoningModel
 )
 from .session_manager import session_manager
 from .prompt_builder import build_system_prompt
@@ -32,7 +32,7 @@ def get_model(
 
     if model_name == "deepseek-chat":
         llm_info = (get_llm_config().get("info"))
-        return ChatModel(
+        return DeepSeekChatModel(
             model=model_name,
             api_key=llm_info.get("api_key"),
             base_url=llm_info.get("base_url"),
@@ -40,8 +40,8 @@ def get_model(
         )
 
     elif model_name == "deepseek-reasoner":
-        llm_info = (get_llm_config().get("info") or {})
-        return ReasoningModel(
+        llm_info = (get_llm_config().get("info"))
+        return DeepSeekReasoningModel(
             model=model_name,
             api_key=llm_info.get("api_key"),
             base_url=llm_info.get("base_url"),
@@ -49,9 +49,10 @@ def get_model(
         )
 
 
+
     raise RuntimeError(
         f"Unsupported llm.info.model '{model_name}'. "
-        "Expected one of: 'deepseek-chat', 'deepseek-reasoner', "
+        "Expected one of: 'deepseek-chat', 'deepseek-reasoner'"
     )
 
 
