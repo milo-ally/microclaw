@@ -15,11 +15,11 @@ from microclaw.config import get_llm_config, get_base_dir, get_rag_mode
 from microclaw.config import get_deepagent
 
 from .model import (
-    DeepSeekChatModel, 
-    DeepSeekReasoningModel, 
+    DeepSeekChatModel,
+    DeepSeekReasoningModel,
     MinimaxReasoningModel,
-    GLMReasoningModel, 
-    GLMChatModel
+    GLMReasoningModel,
+    GLMChatModel,
 )
 from .session_manager import session_manager
 from .prompt_builder import build_system_prompt
@@ -79,7 +79,6 @@ def get_model(
             temperature=llm_info.get("temperature"),
         )
 
-    
     raise RuntimeError(
         f"Unsupported llm.info.model '{model_name}'. "
         "Expected one of: 'deepseek-chat', 'deepseek-reasoner', 'MiniMax-M2.5', 'glm-5'"
