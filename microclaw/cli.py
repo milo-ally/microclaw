@@ -5,6 +5,7 @@ microclaw - CLI entry point for ComputerUseAgent.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -48,13 +49,36 @@ def _is_gateway_ready(url: str, timeout: float = 30.0) -> bool:
         return False
 
 
+def _preferred_python_executable(root: Path) -> str:
+    """
+    Prefer project venv Python when available.
+
+    Some environments may invoke the `microclaw` console script from a different
+    interpreter than the project's `.venv`. Starting uvicorn with the wrong
+    interpreter can miss dependencies (e.g. langchain), causing gateway startup
+    failures during onboarding.
+    """
+    venv = os.environ.get("VIRTUAL_ENV")
+    if venv:
+        cand = Path(venv) / "bin" / "python"
+        if cand.exists():
+            return str(cand)
+
+    cand = root / ".venv" / "bin" / "python"
+    if cand.exists():
+        return str(cand)
+
+    return sys.executable
+
+
 def _run_gateway(port: int) -> subprocess.Popen:
     root = _find_project_root()
+    py = _preferred_python_executable(root)
     env = os.environ.copy()
     env["GATEWAY_HOST"] = "127.0.0.1"
     env["GATEWAY_PORT"] = str(port)
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "microclaw.gateway:app", "--host", "127.0.0.1", "--port", str(port)],
+        [py, "-m", "uvicorn", "microclaw.gateway:app", "--host", "127.0.0.1", "--port", str(port)],
         cwd=str(root),
         env=env,
         stdout=subprocess.DEVNULL,
@@ -65,10 +89,11 @@ def _run_gateway(port: int) -> subprocess.Popen:
 
 def _run_gui(gateway_url: str, gui_port: int = 7860) -> int:
     root = _find_project_root()
+    py = _preferred_python_executable(root)
     env = os.environ.copy()
     env["MICROCLAW_GATEWAY"] = gateway_url
     proc = subprocess.run(
-        [sys.executable, "-m", "microclaw.gui", "--gateway", gateway_url, "--port", str(gui_port)],
+        [py, "-m", "microclaw.gui", "--gateway", gateway_url, "--port", str(gui_port)],
         cwd=str(root),
         env=env,
     )
@@ -77,10 +102,11 @@ def _run_gui(gateway_url: str, gui_port: int = 7860) -> int:
 
 def _run_tui(gateway_url: str) -> int:
     root = _find_project_root()
+    py = _preferred_python_executable(root)
     env = os.environ.copy()
     env["MICROCLAW_GATEWAY"] = gateway_url
     proc = subprocess.run(
-        [sys.executable, "-m", "microclaw.tui", "--gateway", gateway_url],
+        [py, "-m", "microclaw.tui", "--gateway", gateway_url],
         cwd=str(root),
         env=env,
     )

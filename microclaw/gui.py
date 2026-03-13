@@ -423,6 +423,13 @@ def _chat_stream_ui(message: str, history: list[dict[str, str]], session_id: str
         yield display_history
 
 
+def _boot_md_stream_ui(history: list[dict[str, str]], session_id: str) -> Generator[list[dict[str, str]], None, None]:
+    """
+    GUI button: simulate a user sending the boot message.
+    """
+    yield from _chat_stream_ui("Wake up, my friend!", history, session_id)
+
+
 def _workplace_files_ui() -> dict:
     try:
         c = _client_or_raise()
@@ -618,6 +625,7 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         elem_id="chat-input",
                     )
                     with gr.Row(elem_classes=["bottom-actions"]):
+                        boot_md_btn = gr.Button("boot", variant="secondary")
                         submit_btn = gr.Button("Send", variant="primary", elem_id="send-btn")
                         clear_btn = gr.Button("Clear")
                         clean_btn = gr.Button("🧹 Clean workspace", variant="secondary")
@@ -646,6 +654,10 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                     if sid and sid in ids:
                         return gr.update(choices=choices, value=sid)
                     return gr.update(choices=choices)
+
+                boot_md_btn.click(_boot_md_stream_ui, inputs=[chatbot, session_id_state], outputs=[chatbot]).then(
+                    _refresh_choices_after_send, inputs=[session_id_state], outputs=[sessions_dd]
+                )
 
                 submit_btn.click(_chat_stream_ui, inputs=[msg, chatbot, session_id_state], outputs=[chatbot]).then(
                     lambda: "", outputs=[msg]

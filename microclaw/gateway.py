@@ -12,7 +12,16 @@ from typing import Any, AsyncGenerator, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sse_starlette.sse import EventSourceResponse
+try:
+    # Preferred implementation (better SSE ergonomics).
+    from sse_starlette.sse import EventSourceResponse  # type: ignore
+except Exception:  # pragma: no cover
+    # Fallback: avoid hard dependency on sse-starlette.
+    from starlette.responses import StreamingResponse
+
+    class EventSourceResponse(StreamingResponse):
+        def __init__(self, content, status_code: int = 200, headers=None):
+            super().__init__(content=content, status_code=status_code, headers=headers, media_type="text/event-stream")
 
 from microclaw.config import (
     CONFIG_FILE,
@@ -99,21 +108,20 @@ class ChatStreamRequest(BaseModel):
 
 
 def _ensure_runtime_initialized(base_dir: Path) -> None:
-    template = _template_dir()
-
     base_dir = base_dir.resolve()
     if not base_dir.exists():
         _init_workspace_from_template(base_dir)
     else:
-        for src in template.rglob("*"):
-            rel = src.relative_to(template)
-            dst = base_dir / rel
-            if src.is_dir():
-                dst.mkdir(parents=True, exist_ok=True)
-            else:
-                if not dst.exists():
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(src, dst)
+        # IMPORTANT: Do not "heal" deleted template files on every request.
+        #
+        # Users are expected to delete onboarding files like `workplace/BOOTSTRAP.md`
+        # after first-time setup. Previously we copied any missing template files
+        # into an existing base_dir on every chat request, which re-created
+        # BOOTSTRAP.md repeatedly and caused prompt drift / hallucinations.
+        #
+        # We only ensure the required runtime directory structure exists.
+        for d in ("memory", "sessions", "skills", "storage", "workplace"):
+            (base_dir / d).mkdir(parents=True, exist_ok=True)
 
     session_manager.initialize(base_dir)
     agent_manager.initialize(base_dir=base_dir)

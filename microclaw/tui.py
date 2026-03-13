@@ -356,14 +356,88 @@ def flow_chat(client: GatewayClient) -> None:
     title("microclaw · Chat (streaming)")
     show_openai_compat_notice()
 
+    boot_md = prompt_bool("boot? ", False)
+
     session_id = _new_session_id()
     info(f"New session: {session_id}")
-    show_reasoning = prompt_bool("Show reasoning tokens (if any)", False)
+    show_reasoning = prompt_bool("Show reasoning tokens (if reasoning model)", False)
     image_url = prompt("image_url (optional)", "")
     image_url = image_url.strip() or None
 
     print()
     info("Type your message. empty=back. Slash: /sessions /clear /session /health /config /delete /clean /menu /help")
+
+    if boot_md:
+        user_msg = "Wake up, my friend!"
+        info(f"Auto message: {user_msg}")
+        payload = {"session_id": session_id, "message": user_msg, "is_reasoning_model": False, "image_url": image_url}
+
+        try:
+            with spinner("Connecting SSE /api/chat/stream"):
+                it = iter(client.chat_stream_lines(payload))
+                first_line = next(it)
+
+            lines = itertools.chain([first_line], it)
+            for ev_name, data in parse_sse_events(lines):
+                if ev_name == "end":
+                    break
+                if ev_name == "error":
+                    try:
+                        obj = json.loads(data)
+                        err(obj.get("content") or data)
+                    except Exception:
+                        err(data)
+                    break
+                try:
+                    obj = json.loads(data)
+                except Exception:
+                    continue
+
+                et = obj.get("type")
+                if et == "token":
+                    chunk = obj.get("content") or ""
+                    print(chunk, end="", flush=True)
+                elif et == "reasoning_token":
+                    if show_reasoning:
+                        chunk = obj.get("content") or ""
+                        print(_c(chunk, "90"), end="", flush=True)
+                elif et == "retrieval":
+                    section("RAG retrieval")
+                    results = obj.get("results") or []
+                    if not results:
+                        print("(no results)")
+                    else:
+                        for i, r in enumerate(results[:5], start=1):
+                            score = r.get("score", 0)
+                            text = (r.get("text") or "").strip().replace("\n", " ")
+                            print(f"- [{i}] score={score}  {text[:160]}")
+                    print()
+                elif et == "toolcall_message":
+                    chunk = obj.get("content") or ""
+                    print()
+                    print(_c("[tool call]", "34;1") + " " + chunk, end="", flush=True)
+                elif et == "tool_calling":
+                    chunk = obj.get("content") or ""
+                    print(_c(chunk, "34"), end="", flush=True)
+                elif et == "tool_execute":
+                    tname = obj.get("tool") or ""
+                    tin = obj.get("input") or ""
+                    print()
+                    print(_c("[tool execute]", "34;1") + f" {tname}: {tin}")
+                elif et == "tool_response":
+                    tname = obj.get("tool") or ""
+                    tout = obj.get("output") or ""
+                    print()
+                    print(_c("[tool response]", "32;1") + f" {tname}: {tout}")
+                elif et == "tool_execute_done":
+                    print()
+                    print(_c("--- tool block done, agent continuing ---", "90"))
+                elif et == "all_done":
+                    print()
+        except Exception as e:
+            err(str(e))
+        print()
+
     while True:
         user_msg = _chat_input()
         if not user_msg.strip():
