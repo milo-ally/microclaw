@@ -15,10 +15,8 @@ from microclaw.config import get_llm_config, get_base_dir, get_rag_mode
 from microclaw.config import get_deepagent
 
 from .model import (
-    DeepSeekChatModel, 
-    DeepSeekReasoningModel, 
-    DoubaoChatModel, 
-    DoubaoReasoningModel
+    ChatModel, 
+    ReasoningModel
 )
 from .session_manager import session_manager
 from .prompt_builder import build_system_prompt
@@ -26,50 +24,34 @@ from .memory_indexer import get_memory_indexer
 import asyncio
 
 
-def get_model(*, model_name: str, is_reasoning_model: bool) -> ChatOpenAI:
+def get_model(
+    *, 
+    model_name: str, 
+    is_reasoning_model: bool
+) -> ChatOpenAI:
 
     if model_name == "deepseek-chat":
-        llm_info = (get_llm_config().get("info") or {})
-        return DeepSeekChatModel(
+        llm_info = (get_llm_config().get("info"))
+        return ChatModel(
             model=model_name,
             api_key=llm_info.get("api_key"),
-            base_url=llm_info.get("base_url", "https://api.deepseek.com"),
+            base_url=llm_info.get("base_url"),
             temperature=llm_info.get("temperature"),
         )
 
     elif model_name == "deepseek-reasoner":
         llm_info = (get_llm_config().get("info") or {})
-        return DeepSeekReasoningModel(
+        return ReasoningModel(
             model=model_name,
             api_key=llm_info.get("api_key"),
-            base_url=llm_info.get("base_url", "https://api.deepseek.com"),
+            base_url=llm_info.get("base_url"),
             temperature=llm_info.get("temperature"),
         )
 
-    elif model_name == "doubao-seed-2-0-pro-260215":
-        llm_info = (get_llm_config().get("info") or {})
-        # Keep config surface stable: same model string, choose class by is_reasoning_model flag.
-        if is_reasoning_model:
-            
-            return DoubaoReasoningModel(
-                model=model_name,
-                api_key=llm_info.get("api_key"),
-                base_url=llm_info.get("base_url", "https://ark.cn-beijing.volces.com/api/v3"),
-                temperature=llm_info.get("temperature"),
-            )
-
-        return DoubaoChatModel(
-            model=model_name,
-            api_key=llm_info.get("api_key"),
-            base_url=llm_info.get("base_url", "https://ark.cn-beijing.volces.com/api/v3"),
-            temperature=llm_info.get("temperature"),
-        )
 
     raise RuntimeError(
         f"Unsupported llm.info.model '{model_name}'. "
         "Expected one of: 'deepseek-chat', 'deepseek-reasoner', "
-        "'doubao-seed-2-0-pro-260215' (chat/reasoning variants). "
-        "Please check config.llm.info.model."
     )
 
 
