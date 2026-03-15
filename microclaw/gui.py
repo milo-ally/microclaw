@@ -169,8 +169,6 @@ def _config_load_to_form() -> tuple:
     llm_api_key = str(llm_info.get("api_key") or "")
     llm_temperature = float(llm_info.get("temperature", 0.1))
     llm_is_reasoning_model = bool(llm_info.get("is_reasoning_model", False))
-    llm_is_vision = bool(llm_info.get("is_vision_model", False))
-
     emb = cfg.get("embeddings") or {}
     emb_provider = str(emb.get("provider") or "")
     emb_info = emb.get("info") or {}
@@ -201,7 +199,6 @@ def _config_load_to_form() -> tuple:
         llm_api_key,
         llm_temperature,
         llm_is_reasoning_model,
-        llm_is_vision,
         emb_provider,
         emb_model,
         emb_base_url,
@@ -223,7 +220,6 @@ def _config_save_from_form(
     llm_api_key: str,
     llm_temperature: float,
     llm_is_reasoning_model: bool,
-    llm_is_vision: bool,
     emb_provider: str,
     emb_model: str,
     emb_base_url: str,
@@ -273,7 +269,6 @@ def _config_save_from_form(
                 "api_key": _s(llm_api_key),
                 "temperature": float(llm_temperature or 0.1),
                 "is_reasoning_model": bool(llm_is_reasoning_model),
-                "is_vision_model": bool(llm_is_vision),
             },
         }
         embeddings = {
@@ -721,7 +716,6 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                     with gr.Row():
                         cfg_llm_temp = gr.Number(label="Temperature", value=0.1, minimum=0, maximum=2, step=0.1)
                         cfg_llm_thinking = gr.Checkbox(label="Reasoning model", value=False)
-                        cfg_llm_vision = gr.Checkbox(label="Vision model", value=False)
 
                 with gr.Accordion("Embeddings", open=True):
                     cfg_emb_provider = gr.Textbox(label="Provider", placeholder="aliyun / openai")
@@ -777,7 +771,6 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_llm_api_key,
                         cfg_llm_temp,
                         cfg_llm_thinking,
-                        cfg_llm_vision,
                         cfg_emb_provider,
                         cfg_emb_model,
                         cfg_emb_base_url,
@@ -812,7 +805,6 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_llm_api_key,
                         cfg_llm_temp,
                         cfg_llm_thinking,
-                        cfg_llm_vision,
                         cfg_emb_provider,
                         cfg_emb_model,
                         cfg_emb_base_url,
