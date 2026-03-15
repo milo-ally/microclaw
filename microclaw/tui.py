@@ -230,9 +230,6 @@ def _edit_provider_block(kind: str, block: dict[str, Any]) -> dict[str, Any]:
         info_block["is_reasoning_model"] = prompt_bool(
             f"{kind}.info.is_reasoning_model", bool(info_block.get("is_reasoning_model", False))
         )
-        info_block["is_vision_model"] = prompt_bool(
-            f"{kind}.info.is_vision_model", bool(info_block.get("is_vision_model", False))
-        )
     return {"provider": provider, "format": "openai", "info": info_block}
 
 
@@ -432,8 +429,6 @@ def flow_chat(client: GatewayClient) -> None:
 
     boot_md = prompt_bool("boot? ", False)
     show_reasoning = prompt_bool("Show reasoning tokens (if reasoning model)", False)
-    image_url = prompt("image_url (optional)", "")
-    image_url = image_url.strip() or None
 
     print()
     info("Type your message. empty=back. Slash: /sessions /clear /session /health /config /delete /clean /menu /help")
@@ -441,7 +436,7 @@ def flow_chat(client: GatewayClient) -> None:
     if boot_md:
         user_msg = "Wake up, my friend!"
         info(f"Auto message: {user_msg}")
-        payload = {"session_id": session_id, "message": user_msg, "is_reasoning_model": False, "image_url": image_url}
+        payload = {"session_id": session_id, "message": user_msg, "is_reasoning_model": False}
 
         try:
             with spinner("Connecting SSE /api/chat/stream"):
@@ -639,7 +634,7 @@ def flow_chat(client: GatewayClient) -> None:
             warn(f"Unknown slash command: {cmd}. Use /help for available commands.")
             continue
 
-        payload = {"session_id": session_id, "message": user_msg, "is_reasoning_model": False, "image_url": image_url}
+        payload = {"session_id": session_id, "message": user_msg, "is_reasoning_model": False}
 
         try:
             with spinner("Connecting SSE /api/chat/stream"):
