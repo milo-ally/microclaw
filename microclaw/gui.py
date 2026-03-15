@@ -767,7 +767,7 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         )
                         cfg_vision_model = gr.Textbox(
                             label="Vision: Model",
-                            placeholder="gpt-4o-mini",
+                            placeholder="",
                         )
 
                 config_load_btn.click(
