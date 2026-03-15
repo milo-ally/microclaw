@@ -691,52 +691,46 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                 )
 
             with gr.TabItem("⚙️ Config"):
-                config_status = gr.Markdown("_Click Load to fetch config._")
-                gr.Markdown(
-                    "**Important:** This project only supports **OpenAI-compatible** providers. "
-                    'Keep `llm.format` and `embeddings.format` as `"openai"`.\n\n'
-                    "**Supported `llm.info.model` values in this version:**\n\n"
-                    "- `deepseek-chat` — set `llm.info.is_reasoning_model = false`\n"
-                    "- `deepseek-reasoner` — set `llm.info.is_reasoning_model = true`\n"
-                    "- `MiniMax-M2.5` — set `llm.info.is_reasoning_model = true` (MiniMax reasoning_split enabled)\n"
-                    "- `glm-5` — chat when `is_reasoning_model = false`, reasoning when `true`\n\n"
-                    "Other model names are currently treated as unsupported by the gateway."
-                )
+                config_status = gr.Markdown("_Click **Load config** to fetch current config, edit below, then **Save config**._")
                 with gr.Row():
                     config_load_btn = gr.Button("Load config")
                     config_save_btn = gr.Button("Save config", variant="primary")
 
-                with gr.Accordion("Basic", open=True):
-                    cfg_platform = gr.Textbox(label="Platform", placeholder="e.g. Ubuntu24.04")
-                    cfg_base_dir = gr.Textbox(label="Base directory (agent path)", placeholder="/path/to/agent")
+                with gr.Accordion("📌 Basic", open=True):
+                    with gr.Row():
+                        cfg_platform = gr.Textbox(label="Platform", placeholder="e.g. Ubuntu24.04", scale=1)
+                        cfg_base_dir = gr.Textbox(label="Base directory (agent path)", placeholder="/path/to/agent", scale=2)
                     with gr.Row():
                         cfg_rag_mode = gr.Checkbox(label="RAG mode", value=False)
                         cfg_deepagent = gr.Checkbox(label="DeepAgent", value=False)
 
-                with gr.Accordion("LLM (Chat model)", open=True):
-                    cfg_llm_provider = gr.Textbox(label="Provider", placeholder="deepseek / openai")
-                    cfg_llm_model = gr.Textbox(label="Model", placeholder="deepseek-chat")
-                    cfg_llm_base_url = gr.Textbox(label="Base URL", placeholder="https://api.deepseek.com")
-                    cfg_llm_api_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
+                with gr.Accordion("🤖 LLM (Chat model)", open=True):
                     with gr.Row():
-                        cfg_llm_temp = gr.Number(label="Temperature", value=0.1, minimum=0, maximum=2, step=0.1)
-                        cfg_llm_thinking = gr.Checkbox(label="Reasoning model", value=False)
+                        with gr.Column(scale=1):
+                            cfg_llm_provider = gr.Textbox(label="Provider", placeholder="deepseek / openai")
+                            cfg_llm_model = gr.Textbox(label="Model", placeholder="deepseek-chat")
+                            cfg_llm_temp = gr.Number(label="Temperature", value=0.1, minimum=0, maximum=2, step=0.1)
+                            cfg_llm_thinking = gr.Checkbox(label="Reasoning model", value=False)
+                        with gr.Column(scale=1):
+                            cfg_llm_base_url = gr.Textbox(label="Base URL", placeholder="https://api.deepseek.com")
+                            cfg_llm_api_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
 
-                with gr.Accordion("Embeddings", open=True):
-                    cfg_emb_provider = gr.Textbox(label="Provider", placeholder="aliyun / openai")
-                    cfg_emb_model = gr.Textbox(label="Model", placeholder="text-embedding-v3")
-                    cfg_emb_base_url = gr.Textbox(label="Base URL", placeholder="https://...")
-                    cfg_emb_api_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
+                with gr.Accordion("📐 Embeddings", open=False):
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            cfg_emb_provider = gr.Textbox(label="Provider", placeholder="aliyun / openai")
+                            cfg_emb_model = gr.Textbox(label="Model", placeholder="text-embedding-v3")
+                        with gr.Column(scale=1):
+                            cfg_emb_base_url = gr.Textbox(label="Base URL", placeholder="https://...")
+                            cfg_emb_api_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
 
-                with gr.Accordion("Tools (switch on/off)", open=True):
-                    gr.Markdown("Toggle each tool. Some tools have extra parameters below.")
+                with gr.Accordion("🔧 Tools (on/off)", open=True):
+                    gr.Markdown("勾选需要启用的工具；带额外参数的工具在下方「工具参数」中填写。")
                     with gr.Row():
                         cfg_tool_ask = gr.Checkbox(label="ask_user_question", value=True)
                         cfg_tool_fetch = gr.Checkbox(label="fetch_url", value=True)
                         cfg_tool_python = gr.Checkbox(label="python_repl", value=True)
-                        cfg_tool_sql = gr.Checkbox(label="sql_tools", value=False)
                         cfg_tool_read = gr.Checkbox(label="read_file", value=True)
-                        cfg_tool_tavily = gr.Checkbox(label="tavily_search", value=False)
                         cfg_tool_terminal = gr.Checkbox(label="terminal", value=True)
                     with gr.Row():
                         cfg_tool_rm = gr.Checkbox(label="rm_tool", value=True)
@@ -745,31 +739,44 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_write = gr.Checkbox(label="write_tool", value=True)
                         cfg_tool_grep = gr.Checkbox(label="grep_tool", value=True)
                     with gr.Row():
-                        cfg_sql_db_uri = gr.Textbox(
-                            label="SQL: DB URI (when sql_tools enabled)",
-                            placeholder="postgresql+psycopg2://user:pass@host:5432/db",
-                            visible=True,
-                        )
-                        cfg_tavily_key = gr.Textbox(
-                            label="Tavily: API Key (when tavily_search enabled)",
-                            placeholder="tvly-...",
-                            type="password",
-                        )
-                        gr.Markdown("**vision_tool**: 须使用 OpenAI API 格式（base_url 指向兼容 `/chat/completions` 的端点）")
+                        cfg_tool_sql = gr.Checkbox(label="sql_tools", value=False)
+                        cfg_tool_tavily = gr.Checkbox(label="tavily_search", value=False)
                         cfg_tool_vision = gr.Checkbox(label="vision_tool", value=False)
+
+                with gr.Accordion("🔑 工具参数 (SQL / Tavily / Vision)", open=False):
+                    cfg_sql_db_uri = gr.Textbox(
+                        label="SQL: DB URI（启用 sql_tools 时填写）",
+                        placeholder="postgresql+psycopg2://user:pass@host:5432/db",
+                    )
+                    cfg_tavily_key = gr.Textbox(
+                        label="Tavily: API Key（启用 tavily_search 时填写）",
+                        placeholder="tvly-...",
+                        type="password",
+                    )
+                    gr.Markdown("**Vision**：须使用 OpenAI API 格式（base_url 指向兼容 `/chat/completions` 的端点）")
+                    with gr.Row():
                         cfg_vision_base_url = gr.Textbox(
-                            label="Vision: Base URL (OpenAI API 格式，如 https://api.openai.com/v1)",
+                            label="Vision Base URL",
                             placeholder="https://api.openai.com/v1",
+                            scale=2,
                         )
                         cfg_vision_api_key = gr.Textbox(
-                            label="Vision: API Key",
+                            label="Vision API Key",
                             type="password",
                             placeholder="sk-...",
+                            scale=1,
                         )
-                        cfg_vision_model = gr.Textbox(
-                            label="Vision: Model",
-                            placeholder="",
-                        )
+                    cfg_vision_model = gr.Textbox(label="Vision Model", placeholder="", scale=1)
+
+                with gr.Accordion("📖 Model support (参考)", open=False):
+                    gr.Markdown(
+                        "本项目仅支持 **OpenAI 兼容** 的 provider，`llm.format` 与 `embeddings.format` 保持 `\"openai\"`。\n\n"
+                        "**当前支持的 `llm.info.model`：**\n"
+                        "- `deepseek-chat`（is_reasoning_model = false）\n"
+                        "- `deepseek-reasoner`（is_reasoning_model = true）\n"
+                        "- `MiniMax-M2.5`（is_reasoning_model = true）\n"
+                        "- `glm-5`（chat / reasoning 由 is_reasoning_model 控制）"
+                    )
 
                 config_load_btn.click(
                     _config_load_to_form,
