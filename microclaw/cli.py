@@ -397,7 +397,6 @@ def _onboard_config() -> None:
         "sed_first_tool",
         "write_tool",
         "grep_tool",
-        "vision_tool",
     ]:
         current = _tool_enabled(name, default=True)
         enabled = _prompt_on_off(name, current)
