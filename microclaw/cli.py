@@ -269,7 +269,6 @@ def _onboard_config() -> None:
     llm_info = llm_cfg.get("info") or {}
     llm_temperature = llm_info.get("temperature", 0.2)
     llm_is_reasoning = bool(llm_info.get("is_reasoning_model", True))
-    llm_is_vision = bool(llm_info.get("is_vision_model", False))
 
     print("  Choose a supported chat model (enter number 1-5):")
     print("    1) deepseek-chat        · fast chat")
@@ -330,9 +329,6 @@ def _onboard_config() -> None:
     except Exception:
         pass
     # llm_is_reasoning is implied by the menu choice above
-    is_vision_str = input(f"  → Is this a vision model? [y/n] (current {'y' if llm_is_vision else 'n'}): ").strip().lower()
-    llm_is_vision = is_vision_str in ("y", "yes", "1", "true")
-
     config_mod.set_llm_config(
         {
             "provider": llm_provider,
@@ -343,7 +339,6 @@ def _onboard_config() -> None:
                 "api_key": llm_api_key,
                 "temperature": llm_temperature,
                 "is_reasoning_model": llm_is_reasoning,
-                "is_vision_model": llm_is_vision,
             },
         }
     )
