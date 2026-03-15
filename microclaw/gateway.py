@@ -97,7 +97,6 @@ class ConfigPatch(BaseModel):
     llm: Optional[dict[str, Any]] = None
     embeddings: Optional[dict[str, Any]] = None
     tools: Optional[dict[str, Any]] = None
-    mcps: Optional[dict[str, Any]] = None
 
 
 class ChatStreamRequest(BaseModel):
