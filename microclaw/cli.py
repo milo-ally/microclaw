@@ -322,7 +322,7 @@ def _onboard_config() -> None:
         # Best-effort only; failure to open browser should not break onboarding.
         pass
 
-    llm_api_key = _prompt_required("  → LLM api_key (sk-...)")
+    llm_api_key = _prompt_required("  → LLM api_key")
     try:
         temp_in = input(f"  → LLM temperature (0.0-2.0, current {llm_temperature}): ").strip()
         llm_temperature = float(temp_in or llm_temperature)
@@ -358,7 +358,7 @@ def _onboard_config() -> None:
         "  → Embeddings base_url",
         emb_base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    emb_api_key = _prompt_required("  → Embeddings api_key (sk-...)")
+    emb_api_key = _prompt_required("  → Embeddings api_key")
 
     config_mod.set_embeddings_config(
         {
@@ -422,9 +422,9 @@ def _onboard_config() -> None:
     vision_api_key = str(vision_cfg.get("api_key", "") or "")
     vision_model = str(vision_cfg.get("model", "") or "")
     if vision_enabled:
-        vision_base_url = _prompt("  → Vision API base_url", vision_base_url or "https://api.openai.com/v1")
-        vision_api_key = _prompt("  → Vision API key (sk-...)", vision_api_key)
-        vision_model = _prompt("  → Vision model (e.g. gpt-4o-mini)", vision_model or "gpt-4o-mini")
+        vision_base_url = _prompt("  → Vision API base_url", vision_base_url)
+        vision_api_key = _prompt("  → Vision API key", vision_api_key)
+        vision_model = _prompt("  → Vision model", vision_model)
     new_tools["vision_tool"] = {
         "status": "on" if vision_enabled else "off",
         "base_url": vision_base_url,
