@@ -98,6 +98,11 @@ def iter_enabled_tools(*, root_dir: str | Path) -> Iterable[BaseTool]:
 
         return create_grep_tool(root_dir=root_dir)
 
+    def _vision(root_dir: str) -> BaseTool | None:
+        from .vision_tool import create_vision_tool
+
+        return create_vision_tool(root_dir=root_dir)
+
     def _sql_tools(_: str) -> list[BaseTool] | None:
         from .sql_tools import create_sql_tools
 
@@ -115,6 +120,7 @@ def iter_enabled_tools(*, root_dir: str | Path) -> Iterable[BaseTool]:
         ToolSpec("sed_first_tool", _sed_first),
         ToolSpec("write_tool", _write),
         ToolSpec("grep_tool", _grep),
+        ToolSpec("vision_tool", _vision),
         ToolSpec("sql_tools", _sql_tools, kind="list"),
     ]
 
