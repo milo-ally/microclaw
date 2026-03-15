@@ -104,7 +104,6 @@ class ChatStreamRequest(BaseModel):
     session_id: str = Field(default="default", min_length=1, max_length=64)
     message: str = Field(min_length=1)
     is_reasoning_model: bool = False
-    image_url: Optional[str] = None
 
 
 def _ensure_runtime_initialized(base_dir: Path) -> None:
@@ -250,7 +249,6 @@ async def _sse_event_generator(req: ChatStreamRequest) -> AsyncGenerator[dict[st
         async for event in agent_manager.astream(
             message=req.message,
             history=history,
-            image_url=req.image_url,
         ):
             event_type = event.get("type")
 
