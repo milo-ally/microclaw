@@ -1,22 +1,48 @@
-"""Vision tool: use a vision-capable API to understand local images."""
+"""Vision tool: use a vision-capable API to understand images (local file or image URL)."""
 
 from __future__ import annotations
 
 import base64
 import mimetypes
+import os
 from pathlib import Path
 from typing import Type
 
-import requests
 from langchain_core.tools import BaseTool
+from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from microclaw.config import get_tools_config
 
 
+def _is_image_url(s: str) -> bool:
+    """True if input looks like an http(s) image URL."""
+    raw = (s or "").strip()
+    return raw.lower().startswith(("http://", "https://"))
+
+
+def _resolve_root(root_dir: str) -> Path:
+    """Resolve root directory, expanding ~ and making absolute."""
+    if not (root_dir or "").strip():
+        return Path.cwd()
+    return Path(os.path.expanduser(root_dir.strip())).resolve()
+
+
+def _resolve_image_path(image_path: str, root: Path) -> Path | None:
+    """把任意输入路径统一解析为绝对路径。支持相对路径（相对 root）或绝对路径，会展开 ~。"""
+    raw = (image_path or "").strip().replace("\\", "/")
+    if not raw:
+        return None
+    expanded = os.path.expanduser(raw)
+    p = Path(expanded)
+    if p.is_absolute():
+        return p.resolve()
+    return (root / expanded).resolve()
+
+
 class VisionToolInput(BaseModel):
     image_path: str = Field(
-        description="Path to the image file. Can be relative to the project root (e.g. workplace/screenshot.png) or absolute."
+        description="Local image path (relative/absolute, e.g. workplace/screenshot.png) OR image URL (http:// or https://)."
     )
     question: str = Field(
         default="Describe this image in detail.",
@@ -27,9 +53,9 @@ class VisionToolInput(BaseModel):
 class VisionTool(BaseTool):
     name: str = "understand_image"
     description: str = (
-        "Use a vision model to understand a local image. "
-        "Provide the path to the image file (relative to project root or absolute) and an optional question. "
-        "Returns the model's description or answer. Use when the user refers to an image, screenshot, or diagram."
+        "Use a vision model to understand an image. "
+        "Provide either a local image path (relative to project root or absolute) OR an image URL (http(s)://...), and an optional question. "
+        "Returns the model's description or answer. Use when the user refers to an image, screenshot, diagram, or image link."
     )
     args_schema: Type[BaseModel] = VisionToolInput
     root_dir: str = ""
@@ -38,67 +64,73 @@ class VisionTool(BaseTool):
     model: str = ""
 
     def _run(self, image_path: str, question: str = "Describe this image in detail.") -> str:
-        root = Path(self.root_dir).resolve()
-        normalized = image_path.replace("\\", "/").strip().lstrip("./")
-        if not normalized:
+        raw_input = (image_path or "").strip()
+        if not raw_input:
             return "Error: image_path is empty."
-        full_path = (root / normalized).resolve() if not Path(normalized).is_absolute() else Path(normalized).resolve()
-        # Sandbox: if root_dir is set, require path under it
-        if self.root_dir and not str(full_path).startswith(str(root)):
-            return "Access denied: image path must be under the project directory."
-        if not full_path.exists():
-            return f"File not found: {image_path}"
-        if not full_path.is_file():
-            return f"Path is not a file: {image_path}"
 
-        try:
-            raw = full_path.read_bytes()
-        except Exception as e:
-            return f"Error reading image: {e}"
+        # 网络图片：直接使用 URL，无需读本地文件
+        if _is_image_url(raw_input):
+            image_url = raw_input
+        else:
+            # 本地图片：解析路径并转为 base64 data URL
+            root = _resolve_root(self.root_dir)
+            full_path = _resolve_image_path(raw_input, root)
+            if full_path is None:
+                return "Error: image_path is empty."
+            if self.root_dir.strip():
+                try:
+                    full_path = full_path.resolve()
+                    root_res = root.resolve()
+                    if not str(full_path).startswith(str(root_res)):
+                        return (
+                            f"Access denied: image path must be under the project directory ({root_res}). "
+                            f"Resolved path: {full_path}"
+                        )
+                except Exception as e:
+                    return f"Error resolving path: {e}"
+            if not full_path.exists():
+                return f"File not found: {image_path} (resolved to {full_path})"
+            if not full_path.is_file():
+                return f"Path is not a file: {image_path}"
+            try:
+                raw = full_path.read_bytes()
+            except Exception as e:
+                return f"Error reading image: {e}"
+            mime, _ = mimetypes.guess_type(str(full_path))
+            if not mime or not mime.startswith("image/"):
+                mime = "image/jpeg"
+            image_base64 = base64.b64encode(raw).decode("utf-8")
+            image_url = f"data:{mime};base64,{image_base64}"
 
-        mime, _ = mimetypes.guess_type(str(full_path))
-        if not mime or not mime.startswith("image/"):
-            mime = "image/jpeg"
-        b64 = base64.standard_b64encode(raw).decode("ascii")
-        data_url = f"data:{mime};base64,{b64}"
-
-        url = (self.base_url.rstrip("/") + "/chat/completions") if self.base_url else ""
-        if not url or not self.api_key or not self.model:
+        if not self.base_url or not self.api_key or not self.model:
             return "Vision tool is not configured: set base_url, api_key and model in config.tools.vision_tool."
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": question or "Describe this image in detail."},
-                        {"type": "image_url", "image_url": {"url": data_url}},
-                    ],
-                }
-            ],
-            "max_tokens": 2048,
-        }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=60)
-            r.raise_for_status()
-            data = r.json()
-            choice = (data.get("choices") or [None])[0]
-            if not choice:
+            client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url.rstrip("/"),
+            )
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": question or "Describe this image in detail."},
+                            {"type": "image_url", "image_url": {"url": image_url}},
+                        ],
+                    }
+                ],
+                max_tokens=2048,
+                temperature=0.7,
+            )
+            choice = (response.choices or [None])[0]
+            if not choice or not choice.message:
                 return "Vision API returned no choices."
-            msg = choice.get("message") or {}
-            content = msg.get("content") or ""
-            return content.strip() or "(No content)"
-        except requests.Timeout:
-            return "Vision API request timed out."
-        except requests.RequestException as e:
-            return f"Vision API request failed: {e}"
+            content = (choice.message.content or "").strip()
+            return content or "(No content)"
         except Exception as e:
-            return f"Vision tool error: {e}"
+            return f"Vision API request failed: {e}"
 
 
 def create_vision_tool(root_dir: str) -> VisionTool | None:
