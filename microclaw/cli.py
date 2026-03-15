@@ -544,7 +544,7 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
     _onboard_config()
 
     print()
-    print(_c("Step 3: Booting gateway kernel", "36;1"))
+    print(_c("Step 6: Booting gateway kernel", "36;1"))
     print(f"  → Starting gateway on port {port} ...")
     proc = _run_gateway(port)
     try:
@@ -555,7 +555,7 @@ def _cmd_onboard(args: argparse.Namespace) -> int:
         print(f"    URL: {gateway_url}")
 
         print()
-        print(_c("Step 4: Choose interface to launch", "36;1"))
+        print(_c("Step 7: Choose interface to launch", "36;1"))
         print("  [1] TUI (terminal interface)")
         print("  [2] GUI (Gradio web UI)")
         print("  [3] Exit (do not launch UI)")
