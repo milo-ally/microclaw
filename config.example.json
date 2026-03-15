@@ -35,7 +35,8 @@
     "write_tool": { "status": "on" },
     "grep_tool": { "status": "on" },
     "sql_tools": { "status": "off", "db_uri": "" },
-    "tavily_search_tool": { "status": "off", "tavily_api_key": "" }
+    "tavily_search_tool": { "status": "off", "tavily_api_key": "" },
+    "vision_tool": { "status": "off", "base_url": "", "api_key": "", "model": "" }
   }
 }
 
