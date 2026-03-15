@@ -7,6 +7,7 @@ config.json
 .microclaw/
 agent/sessions/*.json
 test.ipynb
+test.py
 *.egg-info/
 tutorial.ipynb
 /tutorial.ipynb

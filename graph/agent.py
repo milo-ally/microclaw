@@ -79,6 +79,7 @@ def get_model(
             temperature=llm_info.get("temperature"),
         )
 
+    
     raise RuntimeError(
         f"Unsupported llm.info.model '{model_name}'. "
         "Expected one of: 'deepseek-chat', 'deepseek-reasoner', 'MiniMax-M2.5', 'glm-5'"

@@ -422,7 +422,8 @@ def _onboard_config() -> None:
     vision_api_key = str(vision_cfg.get("api_key", "") or "")
     vision_model = str(vision_cfg.get("model", "") or "")
     if vision_enabled:
-        vision_base_url = _prompt("  → Vision API base_url", vision_base_url)
+        print("  (Vision API 须为 OpenAI 格式：base_url 指向兼容 /chat/completions 的端点)")
+        vision_base_url = _prompt("  → Vision API base_url (OpenAI 格式)", vision_base_url)
         vision_api_key = _prompt("  → Vision API key", vision_api_key)
         vision_model = _prompt("  → Vision model", vision_model)
     new_tools["vision_tool"] = {

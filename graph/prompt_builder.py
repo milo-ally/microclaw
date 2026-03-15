@@ -1,7 +1,6 @@
 """Build system prompt for agent."""
 
 from pathlib import Path
-
 from microclaw.config import get_platform
 
 MAX_COMPONENT_LENGTH = 20000
@@ -44,6 +43,9 @@ def build_system_prompt(base_dir: Path | str, rag_mode: bool = False) -> str:
         parts.append(f"<!-- RAG MODE -->\n{RAG_GUIDANCE}")
     # Read platform lazily so prompt builder does not depend on config being valid at import-time.
     parts.append(f"<!-- USER PLATFORM -->\n{get_platform()}")
+
+    # add workspace path 
+    parts.append(f"<!-- WORKSPACE PATH -->\n{base}")
 
     return "\n\n".join(parts)
 
