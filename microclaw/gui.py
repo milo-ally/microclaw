@@ -132,7 +132,11 @@ def _health_ui() -> str:
         return f"❌ **Error:** {e}"
 
 
-_TOOL_EXTRA_PARAMS = {"sql_tools": [("db_uri", "DB URI")], "tavily_search_tool": [("tavily_api_key", "Tavily API Key")]}
+_TOOL_EXTRA_PARAMS = {
+    "sql_tools": [("db_uri", "DB URI")],
+    "tavily_search_tool": [("tavily_api_key", "Tavily API Key")],
+    "vision_tool": [("base_url", "Base URL"), ("api_key", "API Key"), ("model", "Model")],
+}
 _COMMON_TOOLS = [
     "ask_user_question_tool",
     "fetch_url_tool",
@@ -146,6 +150,7 @@ _COMMON_TOOLS = [
     "sed_first_tool",
     "write_tool",
     "grep_tool",
+    "vision_tool",
 ]
 
 
@@ -233,8 +238,12 @@ def _config_save_from_form(
     tool_sed_first: bool,
     tool_write: bool,
     tool_grep: bool,
+    tool_vision: bool,
     sql_db_uri: str,
     tavily_api_key: str,
+    vision_base_url: str,
+    vision_api_key: str,
+    vision_model: str,
 ) -> str:
     try:
         c = _client_or_raise()
@@ -255,6 +264,12 @@ def _config_save_from_form(
             "sed_first_tool": {"status": "on" if tool_sed_first else "off"},
             "write_tool": {"status": "on" if tool_write else "off"},
             "grep_tool": {"status": "on" if tool_grep else "off"},
+            "vision_tool": {
+                "status": "on" if tool_vision else "off",
+                "base_url": _s(vision_base_url),
+                "api_key": _s(vision_api_key),
+                "model": _s(vision_model),
+            },
         }
         llm = {
             "provider": _s(llm_provider),
@@ -740,6 +755,20 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                             placeholder="tvly-...",
                             type="password",
                         )
+                        cfg_tool_vision = gr.Checkbox(label="vision_tool", value=False)
+                        cfg_vision_base_url = gr.Textbox(
+                            label="Vision: Base URL (when vision_tool enabled)",
+                            placeholder="https://api.openai.com/v1",
+                        )
+                        cfg_vision_api_key = gr.Textbox(
+                            label="Vision: API Key",
+                            type="password",
+                            placeholder="sk-...",
+                        )
+                        cfg_vision_model = gr.Textbox(
+                            label="Vision: Model",
+                            placeholder="gpt-4o-mini",
+                        )
 
                 config_load_btn.click(
                     _config_load_to_form,
@@ -770,8 +799,12 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_sed_first,
                         cfg_tool_write,
                         cfg_tool_grep,
+                        cfg_tool_vision,
                         cfg_sql_db_uri,
                         cfg_tavily_key,
+                        cfg_vision_base_url,
+                        cfg_vision_api_key,
+                        cfg_vision_model,
                     ],
                 )
                 config_save_btn.click(
@@ -803,8 +836,12 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_sed_first,
                         cfg_tool_write,
                         cfg_tool_grep,
+                        cfg_tool_vision,
                         cfg_sql_db_uri,
                         cfg_tavily_key,
+                        cfg_vision_base_url,
+                        cfg_vision_api_key,
+                        cfg_vision_model,
                     ],
                     outputs=[config_status],
                 )
