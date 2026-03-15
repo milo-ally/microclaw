@@ -98,7 +98,7 @@ class AgentManager:
         self._is_reasoning_model = bool(llm_info.get("is_reasoning_model"))
         self._base_dir = base_dir
         self._model_name = llm_info.get("model")
-        self._tools = get_all_tools(base_dir) # TODO if len(mcp_tools) == 0 else mcp_tools + get_all_tools(base_dir)
+        self._tools = get_all_tools(base_dir)
         self._model = get_model(model_name=self._model_name, is_reasoning_model=self._is_reasoning_model)
         session_manager.initialize(base_dir)
         # print(f"Agent initialized by using model: {llm_info.get('model')}, loaded tools number: {len(self._tools)}")
