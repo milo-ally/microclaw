@@ -186,8 +186,6 @@ def _config_load_to_form() -> tuple:
         for param_key, _ in _TOOL_EXTRA_PARAMS.get(t, []):
             tool_extras.append(str(entry.get(param_key, "")))
 
-    mcps_json = json.dumps(cfg.get("mcps") or {}, ensure_ascii=False, indent=2)
-
     return (
         platform,
         base_dir,
@@ -205,7 +203,6 @@ def _config_load_to_form() -> tuple:
         emb_api_key,
         *tool_checks,
         *tool_extras,
-        mcps_json,
     )
 
 
@@ -238,7 +235,6 @@ def _config_save_from_form(
     tool_grep: bool,
     sql_db_uri: str,
     tavily_api_key: str,
-    mcps_json: str,
 ) -> str:
     try:
         c = _client_or_raise()
@@ -276,21 +272,15 @@ def _config_save_from_form(
             "format": "openai",
             "info": {"model": _s(emb_model), "base_url": _s(emb_base_url), "api_key": _s(emb_api_key)},
         }
-        mcps = {}
-        if _s(mcps_json):
-            mcps = json.loads(mcps_json)
-
         base_dir_val = _s(base_dir)
         platform_val = _s(platform)
-        patch = {"rag_mode": rag_mode, "deepagent": deepagent, "llm": llm, "embeddings": embeddings, "tools": tools_map, "mcps": mcps}
+        patch = {"rag_mode": rag_mode, "deepagent": deepagent, "llm": llm, "embeddings": embeddings, "tools": tools_map}
         if platform_val:
             patch["platform"] = platform_val
         if base_dir_val:
             patch["base_dir"] = base_dir_val
         c.put_config(patch)
         return "✅ **Config saved successfully.**"
-    except json.JSONDecodeError as e:
-        return f"❌ **Invalid MCPs JSON:** {e}"
     except Exception as e:
         return f"❌ **Error:** {e}"
 
@@ -751,13 +741,6 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                             type="password",
                         )
 
-                with gr.Accordion("MCPs (advanced JSON)", open=False):
-                    cfg_mcps_json = gr.Textbox(
-                        label="MCPs config (JSON)",
-                        lines=8,
-                        placeholder='{"server-name": {"transport": "streamable-http", "url": "http://..."}}',
-                    )
-
                 config_load_btn.click(
                     _config_load_to_form,
                     outputs=[
@@ -789,7 +772,6 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_grep,
                         cfg_sql_db_uri,
                         cfg_tavily_key,
-                        cfg_mcps_json,
                     ],
                 )
                 config_save_btn.click(
@@ -823,7 +805,6 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                         cfg_tool_grep,
                         cfg_sql_db_uri,
                         cfg_tavily_key,
-                        cfg_mcps_json,
                     ],
                     outputs=[config_status],
                 )
