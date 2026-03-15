@@ -397,6 +397,7 @@ def _onboard_config() -> None:
         "sed_first_tool",
         "write_tool",
         "grep_tool",
+        "vision_tool",
     ]:
         current = _tool_enabled(name, default=True)
         enabled = _prompt_on_off(name, current)
@@ -415,6 +416,22 @@ def _onboard_config() -> None:
     if tavily_enabled:
         tavily_key = _prompt("  → Tavily API key (tvly-...)", tavily_key_default)
     new_tools["tavily_search_tool"] = {"status": "on" if tavily_enabled else "off", "tavily_api_key": tavily_key}
+
+    vision_enabled = _prompt_on_off("vision_tool", _tool_enabled("vision_tool", default=False))
+    vision_cfg = tools_cfg.get("vision_tool") or {}
+    vision_base_url = str(vision_cfg.get("base_url", "") or "")
+    vision_api_key = str(vision_cfg.get("api_key", "") or "")
+    vision_model = str(vision_cfg.get("model", "") or "")
+    if vision_enabled:
+        vision_base_url = _prompt("  → Vision API base_url", vision_base_url or "https://api.openai.com/v1")
+        vision_api_key = _prompt("  → Vision API key (sk-...)", vision_api_key)
+        vision_model = _prompt("  → Vision model (e.g. gpt-4o-mini)", vision_model or "gpt-4o-mini")
+    new_tools["vision_tool"] = {
+        "status": "on" if vision_enabled else "off",
+        "base_url": vision_base_url,
+        "api_key": vision_api_key,
+        "model": vision_model,
+    }
 
     config_mod.set_managedb_config(new_tools)
     print("  ✓ Tool switches saved.")
