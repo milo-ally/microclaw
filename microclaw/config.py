@@ -156,17 +156,6 @@ def set_managedb_config(tools_config: dict[str, Any]) -> dict[str, Any]:
     return cfg
 
 
-def get_mcps_config() -> dict[str, Any]:
-    return load_config().get("mcps", {})
-
-
-def set_mcps_config(mcps_config: dict[str, Any]) -> dict[str, Any]:
-    cfg = load_config()
-    cfg["mcps"] = mcps_config
-    save_config(cfg)
-    return cfg
-
-
 def get_deepagent() -> bool:
     return _coerce_bool(load_config().get("deepagent", False), default=False)
 
