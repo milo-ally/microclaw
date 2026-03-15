@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from deepagents import create_deep_agent
 
-from typing import AsyncGenerator, Any, Optional
+from typing import AsyncGenerator, Any
 from pathlib import Path
 
 from tools import get_all_tools
@@ -168,8 +168,7 @@ Summary:"""
 
 
     def _build_messages(
-        self, user_message: str, 
-        image_url: Optional[str], 
+        self, user_message: str,
         history: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
 
@@ -190,48 +189,28 @@ Summary:"""
             
             # User message
             if role == "user":
-                if image_url: 
-                    messages.append(HumanMessage([
-                        {"type": "text", "text": content}, 
-                        {"type": "image_url", "image_url": {"url": image_url}} 
-                    ]))
-                else:
-                    messages.append(HumanMessage([
-                        {"type": "text", "text": content}
-                    ]))
+                messages.append(HumanMessage(content=content))
                 continue
             
             # Assistant message
             if role == "assistant":
-                messages.append(AIMessage([
-                    {"type": "text", "text": content}
-                ]))
+                messages.append(AIMessage(content=content))
                 continue
 
             # Tool-related messages and other custom roles
             if role in {"tool_call", "tool_response"}:
-                messages.append(AIMessage([
-                    {"type": "text", "text": f"[{role}] {content}"}
-                ]))
+                messages.append(AIMessage(content=f"[{role}] {content}"))
                 continue
 
             # 其它自定义角色：同样当作 assistant 消息，并标注原 role
-            messages.append(AIMessage([
-                {"type": "text", "text": f"[{role}] {content}"}
-            ]))
+            messages.append(AIMessage(content=f"[{role}] {content}"))
             
-        messages.append(HumanMessage([
-            {"type": "text", "text": user_message}, 
-            {"type": "image_url", "image_url": {"url": image_url}} 
-        ])) if image_url else messages.append(HumanMessage([
-            {"type": "text", "text": user_message}
-        ]))
+        messages.append(HumanMessage(content=user_message))
         return messages
 
     async def astream(
-        self, 
-        message: str, 
-        image_url: Optional[str], 
+        self,
+        message: str,
         history: list[dict[str, Any]]
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
@@ -289,7 +268,7 @@ Summary:"""
                 "role": "retrieval", 
                 "content": rag_context, 
             })
-        messages = self._build_messages(message, history=augmented_history, image_url=image_url)
+        messages = self._build_messages(message, history=augmented_history)
 
         # 用于token计算和输出
         input_content = ""
@@ -306,10 +285,12 @@ Summary:"""
         last_func_len = 0
         
 
-        for msg in messages: 
+        for msg in messages:
             if isinstance(msg, (HumanMessage, AIMessage)):
                 if isinstance(msg.content, list) and len(msg.content) > 0:
-                    input_content += msg.content[0].get("text", "")  
+                    input_content += (msg.content[0].get("text", "") if isinstance(msg.content[0], dict) else str(msg.content[0]))
+                elif isinstance(msg.content, str):
+                    input_content += msg.content  
 
         async for event in agent.astream(
             {"messages": messages},
