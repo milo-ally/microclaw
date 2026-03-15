@@ -755,9 +755,10 @@ def _build_ui(gateway_url: str) -> gr.Blocks:
                             placeholder="tvly-...",
                             type="password",
                         )
+                        gr.Markdown("**vision_tool**: 须使用 OpenAI API 格式（base_url 指向兼容 `/chat/completions` 的端点）")
                         cfg_tool_vision = gr.Checkbox(label="vision_tool", value=False)
                         cfg_vision_base_url = gr.Textbox(
-                            label="Vision: Base URL (when vision_tool enabled)",
+                            label="Vision: Base URL (OpenAI API 格式，如 https://api.openai.com/v1)",
                             placeholder="https://api.openai.com/v1",
                         )
                         cfg_vision_api_key = gr.Textbox(
