@@ -44,7 +44,7 @@ def create_python_repl_tool(root_dir: str | None = None) -> PythonREPLTool | Non
 
 if __name__ == "__main__":
     tool = create_python_repl_tool(root_dir="/home/milo/learnspace/AI_Application/Agent/ComputerUseAgent/agent")
-    print(TOOL_STATUS)
+    # print(TOOL_STATUS)
     if tool:
         code = "import os\nprint(os.getcwd())"
         out = tool.invoke(code)

@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
     project_root = _Path(__file__).resolve().parent.parent
     print(f"Project root: {project_root}")
-    print(f"write_tool status: {TOOL_STATUS}")
+    # print(f"write_tool status: {TOOL_STATUS}")
 
     tool = create_write_tool()
     if tool is None:

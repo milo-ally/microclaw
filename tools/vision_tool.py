@@ -63,7 +63,7 @@ class VisionTool(BaseTool):
     api_key: str = ""
     model: str = ""
 
-    def _run(self, image_path: str, question: str = "Describe this image in detail.") -> str:
+    def _run(self, image_path: str, question: str = "\nDescribe this image in detail. ") -> str:
         raw_input = (image_path or "").strip()
         if not raw_input:
             return "Error: image_path is empty."
@@ -125,10 +125,16 @@ class VisionTool(BaseTool):
                 temperature=0.7,
             )
             choice = (response.choices or [None])[0]
+
             if not choice or not choice.message:
                 return "Vision API returned no choices."
+            
             content = (choice.message.content or "").strip()
+
+            if not content and hasattr(choice.message, 'reasoning_content'):
+                content = (choice.message.reasoning_content or "").strip()
             return content or "(No content)"
+        
         except Exception as e:
             return f"Vision API request failed: {e}"
 
