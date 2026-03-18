@@ -105,7 +105,6 @@ def iter_enabled_tools(*, root_dir: str | Path) -> Iterable[BaseTool]:
 
     def _sql_tools(_: str) -> list[BaseTool] | None:
         from .sql_tools import create_sql_tools
-
         return create_sql_tools()
 
     specs: list[ToolSpec] = [
@@ -125,19 +124,28 @@ def iter_enabled_tools(*, root_dir: str | Path) -> Iterable[BaseTool]:
     ]
 
     for spec in specs:
+
+        # 跳过未启用的工具
         if not _is_on(tools_cfg, spec.config_key):
             continue
+            
+        # 工具加载失败不影响整体启动
         try:
             built = spec.factory(root)
         except Exception:
-            # Keep UX stable: tool failures should not crash the whole agent boot.
             continue
-        if not built:
+            
+        # 空结果直接跳过
+        if built is None:
             continue
-        if spec.kind == "list":
-            for t in (built or []):
-                if t is not None:
-                    yield t
-        else:
-            yield built  # type: ignore[misc]
 
+        # 处理tool列表
+        if spec.kind == "list":
+            if isinstance(built, list):
+                for tool in built:
+                    if isinstance(tool, BaseTool):
+                        yield tool
+        # 处理单个工具
+        else:
+            if isinstance(built, BaseTool):
+                yield built
