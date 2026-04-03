@@ -1,9 +1,8 @@
+from __future__ import annotations
+
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
 from langchain_openai import ChatOpenAI
-
-from __future__ import annotations
-
 from microclaw.config import get_llm_config, get_tools_config
 
 
